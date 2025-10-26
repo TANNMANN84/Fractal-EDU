@@ -1,0 +1,52 @@
+# Simple workflow to build and deploy a Vite project to GitHub Pages
+name: Deploy Vite Project to Pages
+
+on:
+  # Runs on pushes to your main branch
+  push:
+    branches: [ "main" ] # <-- IMPORTANT: Change "main" if your branch is called "master" or something else
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Allow this job to clone the repo and create a page deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18 # You can change this if your project needs a different version
+
+      - name: Install dependencies
+        run: npm ci # 'ci' is faster and safer for workflows than 'install'
+
+      - name: Build project
+        run: npm run build # This runs the "tsc && vite build" from your package.json
+
+      - name: Upload build artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # This should match the 'outDir' in your vite.config.ts (default is 'dist')
+          path: ./dist
+
+  deploy:
+    # This job needs the build job to be successful
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        # This action automatically retrieves the artifact uploaded in the 'build' job
