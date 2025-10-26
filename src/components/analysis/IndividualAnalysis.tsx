@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Student, AppState } from '../../types'; // Import AppState
-import IndividualAnalysisCharts from './IndividualAnalysisCharts';
 
 const IndividualAnalysis: React.FC = () => {
   const { state } = useAppContext();
