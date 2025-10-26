@@ -1,127 +1,120 @@
-import React, { useState } from 'react';
+// src/components/setup/QuestionStructure.tsx
+
+import React from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Question } from '../../types';
-import QuestionEditorModal from '../../components/setup/QuestionEditorModal';
-import { findQuestionAndParent, updateParentQuestionData } from '../../utils/helpers';
+// Make sure updateParentQuestionData is correctly implemented in helpers
+import { updateParentQuestionData } from '../../utils/helpers'; 
 
-interface QuestionItemProps {
-    question: Question;
-    level: number;
-    index: number;
-    onEdit: (id: string) => void;
-    onAddSub: (parentId: string) => void;
-    onRemove: (id: string) => void;
+// *** DEFINE THE EXPECTED PROPS HERE ***
+interface QuestionStructureProps {
+  onEdit: (questionId: string) => void;
+  onAddSub: (parentId: string) => void;
 }
 
-const QuestionItem: React.FC<QuestionItemProps> = ({ question, level, index, onEdit, onAddSub, onRemove }) => {
-    const isMainQuestion = level === 1;
-    const hasSubQuestions = question.subQuestions.length > 0;
-    const bgColor = isMainQuestion ? (index % 2 === 0 ? 'bg-gray-800/50' : 'bg-gray-900/30') : '';
+const QuestionStructure: React.FC<QuestionStructureProps> = ({ onEdit, onAddSub }) => {
+  const { state, dispatch } = useAppContext();
+  const { questions } = state;
 
-    return (
-        <div className={`question-level-${level} mt-2`}>
-            <div className={`${bgColor} border border-gray-700 rounded-lg`}>
-                <div className="flex w-full items-center gap-3 bg-gray-700/50 p-2 rounded-md">
-                    <span className="font-semibold text-gray-300">{isMainQuestion ? `Q${question.number}` : `Part ${question.number}`}</span>
-                    <span className="flex-1 text-sm text-gray-400 truncate">{question.notes || ''}</span>
-                    <span className="text-sm font-semibold text-gray-300 rounded-md bg-gray-600 px-2 py-1">
-                        {hasSubQuestions ? `Total: ${question.maxMarks}` : `Marks: ${question.maxMarks}`}
-                    </span>
-                    <div className="flex items-center space-x-1">
-                        <button onClick={() => onEdit(question.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-gray-300" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>
+   const handleRemove = (id: string) => {
+        const removeRecursively = (qs: Question[], targetId: string): Question[] => {
+            return qs.filter(q => {
+                if (q.id === targetId) return false;
+                if (q.subQuestions && q.subQuestions.length > 0) {
+                    q.subQuestions = removeRecursively(q.subQuestions, targetId);
+                }
+                return true;
+            });
+        };
+
+        let updatedQuestions = removeRecursively([...questions], id);
+
+        // Renumber top-level questions if a top-level was removed
+        // Check if the removed ID belonged to a top-level question in the *original* state
+        const wasTopLevel = state.questions.some(q => q.id === id);
+        if (wasTopLevel) {
+             updatedQuestions = updatedQuestions.map((q, index) => ({
+                 ...q,
+                 number: (index + 1).toString()
+            }));
+        }
+
+       // Recalculate parent data after removal
+       // Ensure updateParentQuestionData returns the modified array
+       updatedQuestions = updateParentQuestionData(updatedQuestions); 
+
+
+        dispatch({ type: 'SET_QUESTIONS', payload: updatedQuestions });
+    };
+
+
+  const renderQuestions = (qs: Question[], level = 1): JSX.Element[] => {
+    // Ensure qs is always an array before mapping
+    if (!Array.isArray(qs)) {
+        console.error("renderQuestions received non-array:", qs);
+        return []; // Return empty array if qs is not valid
+    }
+    return qs.map((q, index) => {
+      // Basic check for valid question object
+      if (!q || typeof q !== 'object' || !q.id) {
+          console.error("Invalid question object encountered:", q);
+          return null; // Skip rendering invalid items
+      }
+      const hasSubQuestions = q.subQuestions && q.subQuestions.length > 0;
+      const isMainQuestion = level === 1;
+      const bgColor = isMainQuestion ? (index % 2 === 0 ? 'bg-gray-800/50' : 'bg-gray-900/30') : '';
+
+      return (
+        <div key={q.id} className={`question-level-${level} mt-2`} data-id={q.id}>
+           <div className={`${bgColor} border border-gray-700 rounded-lg overflow-hidden`}>
+                <div className="flex w-full items-center gap-3 bg-gray-700/50 p-2">
+                    {/* Ensure q.number exists before displaying */}
+                    <span className="font-semibold text-gray-300 w-16 text-center">{isMainQuestion ? `Q ${q.number ?? 'N/A'}` : `Part ${q.number ?? 'N/A'}`}</span>
+                    <span className="flex-1 text-sm text-gray-400 truncate pr-2" title={q.notes || ''}>{q.notes || <span className="italic">No notes</span>}</span>
+                    {hasSubQuestions ? (
+                        <span className="text-sm font-semibold text-gray-300 rounded-md bg-gray-600 px-2 py-1 parent-mark-total">Total: {q.maxMarks ?? 0}</span>
+                    ) : (
+                        <span className="text-sm font-semibold text-gray-300 rounded-md bg-gray-600 px-2 py-1">Marks: {q.maxMarks ?? 0}</span>
+                    )}
+
+                    {/* Action Buttons */}
+                     <div className="flex items-center space-x-1 flex-shrink-0">
+                        <button onClick={() => onEdit(q.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-gray-300" title="Edit">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>
                         </button>
                         {level < 3 && (
-                            <button onClick={() => onAddSub(question.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-indigo-400" title="Add Sub-part">
+                            <button onClick={() => onAddSub(q.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-indigo-400" title="Add Sub-part">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8"/></svg>
                             </button>
                         )}
-                        <button onClick={() => onRemove(question.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-red-400" title="Remove">
+                        <button onClick={() => handleRemove(q.id)} className="p-1.5 rounded-full hover:bg-gray-600 text-red-400" title="Remove">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/></svg>
                         </button>
                     </div>
                 </div>
-                 <div className={`sub-questions-container ${level === 1 ? 'pl-4' : 'pl-2'}`}>
-                    {hasSubQuestions && question.subQuestions.map((subQ, subIndex) => (
-                        <QuestionItem key={subQ.id} question={subQ} level={level + 1} index={subIndex} {...{ onEdit, onAddSub, onRemove }} />
-                    ))}
-                </div>
-            </div>
+                 {hasSubQuestions && (
+                     <div className={`sub-questions-container ${level === 1 ? 'pl-4' : 'pl-2'} py-2 pr-2`}>
+                        {/* Recursive call */}
+                        {renderQuestions(q.subQuestions, level + 1)}
+                    </div>
+                 )}
+           </div>
         </div>
-    );
-};
+      );
+    // Filter out nulls in case of invalid data
+    }).filter(Boolean) as JSX.Element[]; 
+  };
 
-
-const QuestionStructure: React.FC = () => {
-    const { state, dispatch } = useAppContext();
-    const [editingQuestion, setEditingQuestion] = useState<{ id: string | null; parentId: string | null }>({ id: null, parentId: null });
-
-    const checkSyllabus = () => {
-        if (!state.selectedSyllabus) {
-            alert("Please select a syllabus first.");
-            return false;
+  return (
+    <div id="exam-structure-container" className="space-y-2 min-h-[100px]">
+        {/* Ensure questions is an array before checking length */}
+        {(Array.isArray(questions) && questions.length === 0) &&
+          <p className="text-gray-500 text-center py-4">Use the Exam Builder or add questions manually.</p>
         }
-        return true;
-    };
-
-    const handleEdit = (id: string) => {
-        if (!checkSyllabus()) return;
-        setEditingQuestion({ id, parentId: null });
-    };
-
-    const handleAddSub = (parentId: string) => {
-        if (!checkSyllabus()) return;
-        setEditingQuestion({ id: null, parentId });
-    };
-
-    const handleRemove = (id: string) => {
-        const isMain = !findQuestionAndParent(id, state.questions)?.parent;
-        const remove = (targetId: string, qs: Question[]): Question[] => {
-            return qs.filter(q => {
-                if (q.id === targetId) return false;
-                q.subQuestions = remove(targetId, q.subQuestions);
-                return true;
-            });
-        };
-        
-        let updatedQuestions = remove(id, state.questions);
-        if (isMain) {
-            updatedQuestions = updatedQuestions.map((q, i) => ({ ...q, number: (i + 1).toString() }));
-        }
-        
-        const finalQuestions = updateParentQuestionData(updatedQuestions);
-        dispatch({ type: 'SET_QUESTIONS', payload: finalQuestions });
-    };
-
-    const handleModalClose = () => {
-        setEditingQuestion({ id: null, parentId: null });
-        const finalQuestions = updateParentQuestionData(state.questions);
-        dispatch({ type: 'SET_QUESTIONS', payload: finalQuestions });
-    };
-
-    return (
-        <div>
-            {state.questions.map((q: Question, index: number) => (
-            <QuestionItem
-                key={q.id}
-                question={q}
-                level={1}
-                index={index}
-                onEdit={handleEdit}
-                onAddSub={handleAddSub}
-                onRemove={handleRemove}
-            />
-            ))}
-            {(editingQuestion.id || editingQuestion.parentId) && (
-            <QuestionEditorModal
-                isOpen={true}
-                onClose={handleModalClose}
-                questionId={editingQuestion.id}
-                parentId={editingQuestion.parentId}
-            />
-            )}
-        </div>
-    );
+        {/* Render questions, ensuring it's an array */}
+        {renderQuestions(Array.isArray(questions) ? questions : [])}
+    </div>
+  );
 };
 
 export default QuestionStructure;

@@ -1,25 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import Modal from '../../components/Modal';
 import { createStudentObject } from '../../utils/helpers';
-import { Student } from '../../types';
+import { Student, AppMode } from '../../types';
 
-const StudentList: React.FC = () => {
+interface StudentListProps {
+    studentList: Student[];
+    mode: AppMode;
+    isSelectable?: boolean; // Is the list for selecting a student (exam mode) or just display (rapid test mode)
+}
+
+const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectable = true }) => {
     const { state, dispatch } = useAppContext();
     const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
     const [bulkText, setBulkText] = useState('');
+    const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+    const [editingStudent, setEditingStudent] = useState<Partial<Student> | null>(null);
+    const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
 
     const handleSelectStudent = (id: string) => {
-        dispatch({ type: 'SET_SELECTED_STUDENT', payload: id });
+        if (isSelectable && editingStudentId !== id) dispatch({ type: 'SET_SELECTED_STUDENT', payload: id });
     };
 
     const handleAddStudent = () => {
-        dispatch({ type: 'ADD_STUDENT' });
+        const newStudent = createStudentObject();
+        dispatch({ type: 'ADD_STUDENT', payload: { mode: mode, student: newStudent } });
+        // Enter edit mode for the new student
+        setEditingStudentId(newStudent.id);
+        setEditingStudent({ lastName: '', firstName: '', className: '' });
+        setTimeout(() => {
+            // Focus the new input field's first input
+            (document.querySelector(`#student-edit-input-${newStudent.id} input`) as HTMLInputElement)?.focus();
+        }, 100);
     };
 
     const handleRemoveStudent = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        dispatch({ type: 'REMOVE_STUDENT', payload: id });
+        dispatch({ type: 'REMOVE_STUDENT', payload: { studentId: id, mode } });
     };
     
     const handleToggleDeleteMode = () => {
@@ -43,27 +60,126 @@ const StudentList: React.FC = () => {
         });
 
         if (newStudents.length > 0) {
-            dispatch({ type: 'BULK_ADD_STUDENTS', payload: newStudents });
+            dispatch({ type: 'BULK_ADD_STUDENTS', payload: { students: newStudents, mode } });
         }
         setBulkText('');
         setIsBulkAddOpen(false);
     };
 
+    const handleEditClick = (e: React.MouseEvent, student: Student) => {
+        e.stopPropagation();
+        setSelectedStudents(new Set()); // Clear multi-selection
+        setEditingStudentId(student.id);
+        setEditingStudent({ ...student });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingStudentId(null);
+        setEditingStudent(null);
+    };
+
+    const handleSaveEdit = (studentId: string) => {
+        const student = studentList.find(s => s.id === studentId);
+        if (!student || !editingStudent) return;
+
+        const updatedStudent: Student = {
+            ...student,
+            lastName: editingStudent.lastName || '',
+            firstName: editingStudent.firstName || '',
+            className: editingStudent.className?.trim() || '',
+        };
+
+        dispatch({ type: 'UPDATE_STUDENT', payload: { student: updatedStudent, mode } });
+        handleCancelEdit();
+    };
+
+    const handleMultiSelectToggle = (studentId: string) => {
+        const newSelection = new Set(selectedStudents);
+        if (newSelection.has(studentId)) {
+            newSelection.delete(studentId);
+        } else {
+            newSelection.add(studentId);
+        }
+        setSelectedStudents(newSelection);
+    };
+
+    const handleMoveSelected = () => {
+        if (selectedStudents.size === 0) {
+            alert('Please select students to move.');
+            return;
+        }
+        const newClassName = prompt('Enter the new class name for the selected students:');
+        if (newClassName !== null) { // Allow empty string to unassign
+            studentList.forEach(student => {
+                if (selectedStudents.has(student.id)) {
+                    const updatedStudent = { ...student, className: newClassName.trim() };
+                    dispatch({ type: 'UPDATE_STUDENT', payload: { student: updatedStudent, mode } });
+                }
+            });
+            setSelectedStudents(new Set());
+        }
+    };
+
+    const studentsByClass = useMemo(() => {
+        const grouped: { [className: string]: Student[] } = {};
+        studentList.forEach(student => {
+            const className = student.className || 'Unassigned';
+            if (!grouped[className]) {
+                grouped[className] = [];
+            }
+            grouped[className].push(student);
+        });
+        // Sort class names, putting "Unassigned" last
+        const sortedClassNames = Object.keys(grouped).sort((a, b) => {
+            if (a === 'Unassigned') return 1;
+            if (b === 'Unassigned') return -1;
+            return a.localeCompare(b);
+        });
+
+        const result: Array<[string, Student[]]> = [];
+        sortedClassNames.forEach(className => {
+            result.push([className, grouped[className].sort((a,b) => a.lastName.localeCompare(b.lastName))]);
+        });
+        return result;
+
+    }, [studentList]);
+
+    // Focus input when editing starts
+    useEffect(() => {
+        if (editingStudentId) {
+            document.getElementById(`student-edit-input-${editingStudentId}`)?.focus();
+        }
+    }, [editingStudentId]);
 
     return (
         <>
             <h3 className="text-lg font-semibold mb-3 text-white">Class List</h3>
-            <div className="space-y-1 mb-4 max-h-96 overflow-y-auto">
-                {state.students.map(s => (
-                    <div
-                        key={s.id}
-                        onClick={() => handleSelectStudent(s.id)}
-                        className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${s.id === state.selectedStudentId ? 'bg-indigo-600 text-white' : 'hover:bg-gray-700'}`}
-                    >
-                        <span>{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
-                        {state.deleteMode && (
-                            <button onClick={(e) => handleRemoveStudent(e, s.id)} className="text-red-400 hover:text-red-300" title="Remove Student">✕</button>
-                        )}
+            <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                {studentsByClass.map(([className, students]) => (
+                    <div key={className}>
+                        <h4 className="text-sm font-bold text-indigo-300 bg-gray-700/50 px-2 py-1 rounded-t-md">{className}</h4>
+                        {students.map(s => (
+                             <div key={s.id} onClick={() => handleSelectStudent(s.id)} className={`flex items-center justify-between p-2 rounded-b-md transition-colors border-l border-r border-b border-gray-700 ${ editingStudentId === s.id ? 'bg-gray-700' : (s.id === state.selectedStudentId && isSelectable) ? 'bg-indigo-600 text-white cursor-pointer' : 'hover:bg-gray-700 cursor-pointer' }`} >
+                                <div className="flex items-center gap-2 flex-grow">
+                                    <input type="checkbox" checked={selectedStudents.has(s.id)} onChange={() => handleMultiSelectToggle(s.id)} className="form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-600 rounded focus:ring-indigo-500" />
+                                    {editingStudentId === s.id ? (
+                                        <div id={`student-edit-input-${s.id}`} className="flex gap-2 w-full">
+                                            <input type="text" value={editingStudent?.lastName || ''} onChange={e => setEditingStudent(p => ({...p, lastName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Last Name" autoFocus />
+                                            <input type="text" value={editingStudent?.firstName || ''} onChange={e => setEditingStudent(p => ({...p, firstName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="First Name" />
+                                            <input type="text" value={editingStudent?.className || ''} onChange={e => setEditingStudent(p => ({...p, className: e.target.value}))} onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(s.id)} onBlur={() => handleSaveEdit(s.id)} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Class Name" />
+                                        </div>
+                                    ) : (
+                                        <span>{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
+                                    )}
+                                </div>
+                                {editingStudentId !== s.id && (
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        {!state.deleteMode && <button onClick={(e) => handleEditClick(e, s)} className="text-gray-400 hover:text-white text-xs opacity-50 hover:opacity-100 transition-opacity" title="Edit Student">✏️</button>}
+                                        {state.deleteMode && <button onClick={(e) => handleRemoveStudent(e, s.id)} className="text-red-400 hover:text-red-300" title="Remove Student">✕</button>}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 ))}
             </div>
@@ -72,6 +188,11 @@ const StudentList: React.FC = () => {
                     <button onClick={handleAddStudent} className="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Add Student</button>
                     <button onClick={() => setIsBulkAddOpen(true)} className="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Bulk Add</button>
                 </div>
+                {selectedStudents.size > 0 && (
+                    <button onClick={handleMoveSelected} className="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                        Move {selectedStudents.size} Selected to Class...
+                    </button>
+                )}
                 <div className="flex items-center justify-center gap-2 pt-2">
                     <label className="text-sm font-medium text-red-400">Delete Mode:</label>
                     <button onClick={handleToggleDeleteMode} type="button" role="switch" aria-checked={state.deleteMode} className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent ${state.deleteMode ? 'bg-red-600' : 'bg-gray-600'} transition-colors duration-200 ease-in-out`}>

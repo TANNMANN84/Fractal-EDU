@@ -1,8 +1,9 @@
-import StudentList from '@/components/entry/StudentList';
-import StudentResultsForm from '@/components/entry/StudentResultsForm';
-import AnalysisDashboard from '@/components/analysis/AnalysisDashboard';
-import { useAppContext } from '@/context/AppContext';
-import { Student, Question } from '@/types';
+import React from 'react'; // Added React import
+import StudentList from './StudentList';
+import StudentResultsForm from './StudentResultsForm';
+import AnalysisDashboard from '../analysis/AnalysisDashboard';
+import { useAppContext } from '../../context/AppContext';
+import { Student, Question } from '../../types';
 
 interface DataEntryViewProps {
     onEditSetup: () => void;
@@ -13,15 +14,22 @@ const DataEntryView = ({ onEditSetup }: DataEntryViewProps) => {
     
     const handleExportCsv = () => {
         // 1. Get header row
-        const headers = ['Student Name', ...state.questions.map((q: Question) => `Q${q.number}`)];
+        const headers = ['Student Name', ...state.questions.map((q: Question) => `Q${q.number}`)]; // Use state.questions
         
         // 2. Get data rows
-        const rows = state.students.map((student: Student) => {
+        const rows = state.examStudents.map((student: Student) => { // Use state.examStudents
             const studentRow = [(student as any).name ?? student.id];
-            const results = (state as any).results;
             state.questions.forEach((q: Question) => {
-                const result = results?.[student.id]?.[q.id];
-                studentRow.push(result !== undefined ? String(result.score) : '');
+                let score: string | number | undefined = '';
+                // Prefer MCQ responses if present, otherwise fall back to numeric/text responses
+                if (student.mcqResponses && student.mcqResponses[q.id] !== undefined) {
+                    score = String(student.mcqResponses[q.id] ?? '');
+                } else if (student.responses && student.responses[q.id] !== undefined) {
+                    score = String(student.responses[q.id]);
+                } else {
+                    score = '';
+                }
+                studentRow.push(score);
             });
             return studentRow.join(',');
         });
@@ -52,12 +60,12 @@ const DataEntryView = ({ onEditSetup }: DataEntryViewProps) => {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="lg:col-span-1 bg-gray-900/50 p-4 rounded-lg h-fit">
-                        <StudentList />
+                        <StudentList studentList={state.examStudents} mode="exam" />
                     </div>
                     <div className="lg:col-span-3">
                         {state.selectedStudentId ? <StudentResultsForm /> : 
                             <div className="flex items-center justify-center h-full bg-gray-900/50 rounded-lg min-h-[300px]">
-                                <p className="text-gray-500">{state.students.length > 0 ? "Select a student to enter results." : "Add a student to begin."}</p>
+                                <p className="text-gray-500">{state.examStudents.length > 0 ? "Select a student to enter results." : "Add a student to begin."}</p>
                             </div>
                         }
                     </div>

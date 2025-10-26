@@ -75,7 +75,7 @@ export const getQuestionPath = (id: string, questions: Question[], currentPath: 
 
 
 export const getColorForScore = (score: number | null | undefined, maxMarks: number): string => {
-    if (score === null || score === undefined || maxMarks == 0) return 'bg-gray-700';
+    if (score === null || score === undefined || maxMarks === 0) return 'bg-gray-700';
     const percentage = (score / maxMarks) * 100;
     if (percentage === 0) return 'bg-red-900/50';
     if (percentage < 40) return 'bg-red-700/60';
@@ -96,10 +96,10 @@ export const updateParentQuestionData = (questions: Question[]): Question[] => {
             if (q.subQuestions.length > 0) {
                 const updatedSubQuestions = aggregateAndUpdate(q.subQuestions);
                 const leaves = getLeafQuestions(updatedSubQuestions);
-                const allModules = new Set(leaves.flatMap(leaf => leaf.module));
-                const allContent = new Set(leaves.flatMap(leaf => leaf.contentArea));
-                const allOutcomes = new Set(leaves.flatMap(leaf => leaf.outcome));
-                const allVerbs = new Set(leaves.flatMap(leaf => leaf.cognitiveVerb));
+                const allModules = new Set(leaves.flatMap(leaf => leaf.module || []));
+                const allContent = new Set(leaves.flatMap(leaf => leaf.contentArea || []));
+                const allOutcomes = new Set(leaves.flatMap(leaf => leaf.outcome || []));
+                const allVerbs = new Set(leaves.flatMap(leaf => leaf.cognitiveVerb || []));
 
                 return {
                     ...q,

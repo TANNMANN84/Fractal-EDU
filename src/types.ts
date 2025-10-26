@@ -1,55 +1,125 @@
+// src/types.ts
+
+// --- Exam Analysis Question Type ---
 export interface Question {
   id: string;
-  number: string;
+  number: string; // e.g., "1", "a", "i"
   maxMarks: number;
   type: 'marks' | 'mcq';
-  correctAnswer: string;
-  module: string[];
-  contentArea: string[];
-  outcome: string[];
-  cognitiveVerb: string[];
-  notes: string;
-  subQuestions: Question[];
-  displayNumber?: string; // Added for rendering
-  // FIX: Add optional 'level' property to support question nesting depth.
+  correctAnswer: string; // For MCQ
+  module?: string[]; // Optional arrays
+  contentArea?: string[];
+  outcome?: string[];
+  cognitiveVerb?: string[];
+  notes?: string; // Optional notes
+  subQuestions: Question[]; // Always an array, even if empty
+  // Properties added by helper functions, optional
+  displayNumber?: string;
   level?: number;
 }
 
+// --- Student Type (Shared) ---
 export interface Student {
   id: string;
   lastName: string;
   firstName: string;
-  tags: string[];
-  responses: { [questionId: string]: number };
-  mcqResponses: { [questionId: string]: string };
+  className?: string;
+  tags?: string[]; // Optional tags array
+  // Exam responses
+  responses: { [questionId: string]: number }; // Keyed by Exam Question ID
+  mcqResponses: { [questionId: string]: string }; // Keyed by Exam Question ID
 }
 
+// --- Exam Template Type ---
 export interface Template {
-    questions: Question[];
-    selectedSyllabus: string;
-}
-
-export interface AppState {
   questions: Question[];
-  students: Student[];
-  deleteMode: boolean;
   selectedSyllabus: string;
-  selectedStudentId: string | null;
-  structureLocked: boolean;
-  activeTags: string[];
-  rankingSort: { key: string; direction: 'asc' | 'desc' };
 }
 
+// --- Rapid Test Question Types ---
+export type RapidQuestionType =
+  | 'Spelling'
+  | 'MCQ'
+  | 'Matching'
+  | 'Written'
+  | 'Marks';
+
+export interface RapidQuestion {
+  id: string;
+  prompt: string;
+  type: RapidQuestionType;
+  maxMarks: number;
+  // --- Matching Type Specific ---
+  matchPairs?: Array<{
+    id: string;
+    term: string;
+    correctMatch: string;
+  }>;
+  // --- MCQ Specific ---
+  options?: string[];
+  // --- Spelling/MCQ Specific ---
+  correctAnswer?: string;
+}
+
+// --- Rapid Test Result Type ---
+export interface RapidTestResult {
+  studentId: string; // Links to Student.id
+  type: 'pre' | 'post';
+  responses: {
+    // Keyed by RapidQuestion ID (for non-matching) or MatchPair ID (for matching)
+    [questionOrTermId: string]: string | number | boolean; // boolean for matching items
+  };
+  totalScore: number;
+}
+
+// --- Rapid Test Type ---
+export interface RapidTest {
+  id: string;
+  name: string;
+  questions: RapidQuestion[];
+  results: RapidTestResult[]; // Array of results
+}
+
+// --- App Mode ---
+export type AppMode = 'exam' | 'rapidTest';
+
+// --- Global Application State ---
+export interface AppState {
+  // Mode and Data
+  appMode: AppMode;
+  rapidTests: RapidTest[]; // Array of rapid tests
+  questions: Question[]; // Array of exam questions
+  examStudents: Student[]; // For senior exam analysis
+  rapidTestStudents: Student[]; // For junior pre/post tests
+  selectedSyllabus: string;
+  // UI State
+  deleteMode: boolean;
+  selectedStudentId: string | null; // For exam data entry
+  structureLocked: boolean; // For exam setup
+  activeTags: string[]; // For filtering analysis
+  rankingSort: { key: string; direction: 'asc' | 'desc' }; // For exam ranking table
+}
+
+// --- Actions for Reducer ---
 export type AppAction =
   | { type: 'SET_STATE'; payload: AppState }
+  | { type: 'SET_APP_MODE'; payload: AppMode }
+  // Exam Actions
   | { type: 'SET_SYLLABUS'; payload: string }
   | { type: 'SET_QUESTIONS'; payload: Question[] }
-  | { type: 'ADD_STUDENT' }
-  | { type: 'BULK_ADD_STUDENTS'; payload: Student[] }
-  | { type: 'REMOVE_STUDENT'; payload: string }
-  | { type: 'SET_SELECTED_STUDENT'; payload: string | null }
-  | { type: 'UPDATE_STUDENT'; payload: Student }
-  | { type: 'SET_DELETE_MODE'; payload: boolean }
   | { type: 'SET_STRUCTURE_LOCKED'; payload: boolean }
-  | { type: 'SET_ACTIVE_TAGS', payload: string[] }
-  | { type: 'SET_RANKING_SORT', payload: { key: string; direction: 'asc' | 'desc' } };
+  // Student Actions (Shared)
+  | { type: 'ADD_STUDENT'; payload: { mode: AppMode, student?: Student } }
+  | { type: 'BULK_ADD_STUDENTS'; payload: { students: Student[], mode: AppMode } }
+  | { type: 'REMOVE_STUDENT'; payload: { studentId: string, mode: AppMode } }
+  | { type: 'SET_SELECTED_STUDENT'; payload: string | null } // payload is studentId
+  | { type: 'UPDATE_STUDENT'; payload: { student: Student, mode: AppMode } }
+  | { type: 'SET_DELETE_MODE'; payload: boolean }
+  // Analysis Actions
+  | { type: 'SET_ACTIVE_TAGS'; payload: string[] }
+  | { type: 'SET_RANKING_SORT'; payload: AppState['rankingSort'] }
+  // Rapid Test Actions
+  | { type: 'ADD_RAPID_TEST'; payload: RapidTest }
+  | { type: 'UPDATE_RAPID_TEST'; payload: RapidTest }
+  | { type: 'DELETE_RAPID_TEST'; payload: string } // payload is testId
+  | { type: 'SET_RAPID_TEST_RESULTS'; payload: { testId: string; studentId: string; testType: 'pre' | 'post'; responses: RapidTestResult['responses'] } };

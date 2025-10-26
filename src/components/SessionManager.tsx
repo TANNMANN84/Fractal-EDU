@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { useAppContext } from '.././context/AppContext';
+import { useAppContext } from '../context/AppContext';
 import { AppState } from '../types';
 import * as syncService from '../services/syncService';
 

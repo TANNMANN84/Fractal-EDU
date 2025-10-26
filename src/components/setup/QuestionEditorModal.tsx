@@ -92,7 +92,7 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
 
     const handleCheckboxChange = (field: 'module' | 'contentArea' | 'outcome' | 'cognitiveVerb', value: string) => {
         if (!question) return;
-        const currentValues = question[field];
+        const currentValues = question[field] || [];
         const newValues = currentValues.includes(value) ? currentValues.filter(v => v !== value) : [...currentValues, value];
         handleFieldChange(field, newValues);
     };
@@ -157,17 +157,15 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
             <div className="w-full mt-1 rounded-md p-2 h-32 overflow-y-auto">
                 {items.map(item => (
                     <label key={item} className="flex items-center space-x-2 text-sm p-1 rounded-md hover:bg-gray-700/50">
-                        <input type="checkbox" checked={question[field].includes(item)} onChange={() => handleCheckboxChange(field, item)} className="rounded border-gray-500 bg-gray-600 text-indigo-500 shadow-sm focus:ring-indigo-500"/>
+                        <input type="checkbox" checked={question[field]?.includes(item)} onChange={() => handleCheckboxChange(field, item)} className="rounded border-gray-500 bg-gray-600 text-indigo-500 shadow-sm focus:ring-indigo-500"/>
                         <span>{item}</span>
                     </label>
                 ))}
             </div>
         );
 
-        const selectedModules = syllabus.modules.filter((m: any) => question.module.includes(m.name));
-        // FIX: Explicitly providing the generic type `<string>` to `new Set` to correct the type inference from `Set<unknown>` to `Set<string>`.
+        const selectedModules = syllabus.modules.filter((m: any) => question.module?.includes(m.name));
         const contentAreas = [...new Set<string>(selectedModules.flatMap((m: { contentAreas: string[] }) => m.contentAreas))];
-        // FIX: Explicitly providing the generic type `<string>` to `new Set` to correct the type inference from `Set<unknown>` to `Set<string>`.
         const outcomes = Array.from(new Set<string>(selectedModules.flatMap((m: { outcomes: string[] }) => {
             const isYr11 = parseInt(m.outcomes[0].split('-')[0], 10) === 11;
             const relevantWs = isYr11 ? wsOutcomes.yr11 : wsOutcomes.yr12;
