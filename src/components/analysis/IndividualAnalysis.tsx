@@ -74,7 +74,7 @@ const IndividualAnalysis: React.FC = () => {
         ))}
       </select>
       <div id="individual-analysis-content" className="mt-4">
-        <IndividualAnalysisCharts selectedStudents={selectedStudents} />
+        {/* The charts for this view were removed along with the PDF export feature. */}
       </div>
     </div>
   );

@@ -2,8 +2,7 @@
 
 import React, { useMemo, useCallback, useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { RapidQuestion, RapidTest, Student, AppState } from '../../types';
-import BarChart, { BarChartData } from './BarChart'; 
+import { RapidQuestion, RapidTest, Student, AppState } from '../../types'; import BarChart, { BarChartData } from './BarChart';
 
 interface AnalysisData {
   studentId: string;
@@ -157,78 +156,6 @@ const RapidTestAnalysis: React.FC<RapidTestAnalysisProps> = ({ test, onBack }) =
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const preResult = useMemo(() => test.results.find(r => r.studentId === selectedStudentId && r.type === 'pre'), [test.results, selectedStudentId]);
   const postResult = useMemo(() => test.results.find(r => r.studentId === selectedStudentId && r.type === 'post'), [test.results, selectedStudentId]);
-
-  const studentQuestionChartData: BarChartData[] = useMemo(() => {
-    if (!test || !selectedStudentId) return [];
-    return test.questions.map((q, index) => {
-      const preResponse = preResult?.responses[q.id];
-      const postResponse = postResult?.responses[q.id];
-
-      const preScore = preResponse !== undefined ? getScoreForRapidQuestion(q, preResponse) : 0;
-      const postScore = postResponse !== undefined ? getScoreForRapidQuestion(q, postResponse) : 0;
-
-      const prePercentage = q.maxMarks > 0 ? (preScore / q.maxMarks) * 100 : 0;
-      const postPercentage = q.maxMarks > 0 ? (postScore / q.maxMarks) * 100 : 0;
-
-      return {
-        label: `Q${index + 1}`,
-        preValue: prePercentage,
-        postValue: postPercentage,
-      };
-    });
-  }, [test, selectedStudentId, preResult, postResult, getScoreForRapidQuestion]);
-
-  // --- Render Student Drill Down View ---
-  if (selectedStudentId) {
-    return (
-      <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold text-white">Detailed Analysis for {selectedStudent?.firstName} {selectedStudent?.lastName}</h3>
-          <div className="flex gap-2">
-            <button onClick={() => setSelectedStudentId(null)} className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
-              Back to Class View
-            </button>
-          </div>
-        </div>
-        <div className="space-y-8">
-          <BarChart data={studentQuestionChartData} title="Score per Question" />
-          <div>
-            <h4 className="text-lg font-semibold text-gray-200 mb-3">Detailed Answers</h4>
-            <div className="overflow-x-auto rounded-lg border border-gray-700">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-700/50">
-                  <tr>
-                    <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-6">Question</th>
-                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Pre-Test Answer</th>
-                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Pre-Test Score</th>
-                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Post-Test Answer</th>
-                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Post-Test Score</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
-                  {test.questions.map(q => {
-                    const preResponse = preResult?.responses[q.id];
-                    const postResponse = postResult?.responses[q.id];
-                    const preScore = preResponse !== undefined ? getScoreForRapidQuestion(q, preResponse) : null;
-                    const postScore = postResponse !== undefined ? getScoreForRapidQuestion(q, postResponse) : null;
-                    return (
-                      <tr key={q.id} className="hover:bg-gray-700/40">
-                        <td className="py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">{q.prompt}</td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300 text-center">{preResponse ?? '-'}</td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-cyan-300 text-center">{preScore !== null ? `${preScore} / ${q.maxMarks}` : '-'}</td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300 text-center">{postResponse ?? '-'}</td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-cyan-300 text-center">{postScore !== null ? `${postScore} / ${q.maxMarks}` : '-'}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // --- Render Main Analysis View ---
   return (
