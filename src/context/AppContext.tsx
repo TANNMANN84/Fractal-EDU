@@ -61,6 +61,18 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         draft.exams.push(action.payload);
         draft.activeExamId = action.payload.id; // Make the new exam active
         break;
+      // --- ADD DELETE_EXAM CASE ---
+      case 'DELETE_EXAM': {
+        const examIdToDelete = action.payload;
+        draft.exams = draft.exams.filter(exam => exam.id !== examIdToDelete);
+        // If the deleted exam was the active one, reset activeExamId
+        if (draft.activeExamId === examIdToDelete) {
+          draft.activeExamId = null;
+          draft.selectedStudentId = null; // Also clear selected student
+        }
+        break;
+      }
+      // --- END ADD ---
       case 'SET_ACTIVE_EXAM':
         draft.activeExamId = action.payload;
         draft.selectedStudentId = null; // Reset student selection when changing exams
@@ -233,8 +245,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
       default:
         // Ensures type safety - if a new action is added without a case, TypeScript complains
-        const _exhaustiveCheck: never = action;
-        console.warn(`Unhandled action type: ${(_exhaustiveCheck as any)?.type}`);
+        // Use a type assertion to satisfy TypeScript if needed, but ensure all actions are handled
+        try {
+            const _exhaustiveCheck: never = action;
+        } catch (e) {
+            // This error handling might be needed if _exhaustiveCheck causes runtime issues in some JS environments
+            console.warn(`Unhandled action type: ${(action as any)?.type}`);
+        }
         break; // Let Immer handle returning the original state
     }
   });
