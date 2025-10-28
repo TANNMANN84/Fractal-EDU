@@ -8,15 +8,18 @@ import { Bar } from 'react-chartjs-2';
 
 const DistractorAnalysis: React.FC = () => {
   const { state } = useAppContext();
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const examStudents = activeExam?.students || [];
+  const questions = activeExam?.questions || [];
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
 
   const activeStudents = useMemo(() => {
-    return state.examStudents.filter((s: Student) => s.lastName && s.firstName); // Corrected
-  }, [state.examStudents]); // Corrected
+    return examStudents.filter((s: Student) => s.lastName && s.firstName);
+  }, [examStudents]);
 
   const mcqQuestions = useMemo(() => {
-    return getLeafQuestions(state.questions).filter((q) => q.type === 'mcq');
-  }, [state.questions]);
+    return getLeafQuestions(questions).filter((q) => q.type === 'mcq');
+  }, [questions]);
 
   const chartData = useMemo(() => {
     if (!selectedQuestionId || activeStudents.length === 0) {

@@ -8,15 +8,18 @@ import { Bar } from 'react-chartjs-2';
 
 const QuestionAnalysis: React.FC = () => {
   const { state } = useAppContext();
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const examStudents = activeExam?.students || [];
+  const questions = activeExam?.questions || [];
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
 
   const activeStudents = useMemo(() => {
-    return state.examStudents.filter((s: Student) => s.lastName && s.firstName);
-  }, [state.examStudents]);
+    return examStudents.filter((s: Student) => s.lastName && s.firstName);
+  }, [examStudents]);
 
   const allLeafQuestions = useMemo(() => {
-    return getLeafQuestions(state.questions);
-  }, [state.questions]);
+    return getLeafQuestions(questions);
+  }, [questions]);
 
   const chartData = useMemo(() => {
     if (!selectedQuestionId || activeStudents.length === 0) {

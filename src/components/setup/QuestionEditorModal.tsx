@@ -32,6 +32,8 @@ interface QuestionEditorModalProps {
 
 const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClose, questionId, parentId }) => {
     const { state, dispatch } = useAppContext();
+    const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+    const questions = activeExam?.questions || [];
     const [question, setQuestion] = useState<Question | null>(null);
 
     const { isNew, fullTitle } = useMemo(() => {
@@ -39,10 +41,11 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
         let title = "Edit Question";
         let path: Question[] | null = [];
         if (questionId) {
-            path = getQuestionPath(questionId, state.questions);
+            isNew = false;
+            path = getQuestionPath(questionId, questions);
         } else if (parentId && question) {
             isNew = true;
-            path = getQuestionPath(parentId, state.questions);
+            path = getQuestionPath(parentId, questions);
             if (path) path.push(question);
         } else if (question) {
             isNew = true;
@@ -56,29 +59,29 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
             }
         }
         return { isNew, fullTitle: title };
-    }, [questionId, parentId, state.questions, question]);
+    }, [questionId, parentId, questions, question]);
 
     useEffect(() => {
         if (isOpen) {
             if (questionId) {
-                const existingQuestion = findQuestionById(questionId, state.questions);
+                const existingQuestion = findQuestionById(questionId, questions);
                 setQuestion(existingQuestion ? JSON.parse(JSON.stringify(existingQuestion)) : null);
             } else {
-                const parent = parentId ? findQuestionById(parentId, state.questions) : null;
+                const parent = parentId ? findQuestionById(parentId, questions) : null;
                 let newNumber;
                 if (parent) {
-                    const parentLevel = findQuestionAndParent(parent.id, state.questions)?.parent ? 2 : 1;
+                    const parentLevel = findQuestionAndParent(parent.id, questions)?.parent ? 2 : 1;
                     const nextIndex = parent.subQuestions.length;
                     newNumber = parentLevel === 1 ? String.fromCharCode(97 + nextIndex) : toRomanNumeral(nextIndex + 1);
                 } else {
-                    newNumber = (state.questions.length + 1).toString();
+                    newNumber = (activeExam?.questions.length || 0 + 1).toString();
                 }
                 setQuestion(createQuestionObject(newNumber));
             }
         } else {
             setQuestion(null);
         }
-    }, [isOpen, questionId, parentId, state.questions]);
+    }, [isOpen, questionId, parentId, questions, activeExam?.questions.length]);
     
     const handleFieldChange = (field: keyof Question, value: any) => {
         if (!question) return;
@@ -100,7 +103,7 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
     const handleSave = (continueToNext = false) => {
         if (!question) return;
 
-        const updatedQuestions = produce(state.questions, (draft: Draft<Question[]>) => {
+        const updatedQuestions = produce(questions, (draft: Draft<Question[]>) => {
             if (isNew) {
                 if (parentId) {
                     const parent = findQuestionById(parentId, draft);
@@ -121,7 +124,7 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
         });
         
         const finalQuestions = updateParentQuestionData(updatedQuestions);
-        dispatch({ type: 'SET_QUESTIONS', payload: finalQuestions });
+        if (activeExam) dispatch({ type: 'SET_QUESTIONS', payload: { examId: activeExam.id, questions: finalQuestions } });
         
         if (continueToNext) {
             const allFlatQuestions = getAllQuestionsFlat(finalQuestions);
@@ -146,11 +149,11 @@ const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({ isOpen, onClo
     
     if (!question) return null;
 
-    const { parent } = questionId ? findQuestionAndParent(questionId, state.questions) || {} : { parent: null };
+    const { parent } = questionId ? findQuestionAndParent(questionId, questions) || {} : { parent: null };
     const isMainQuestionInState = !parent;
 
     const renderSyllabusCheckboxes = () => {
-        const syllabus = state.selectedSyllabus ? syllabusData[state.selectedSyllabus] : null;
+        const syllabus = activeExam?.selectedSyllabus ? syllabusData[activeExam.selectedSyllabus] : null;
         if (!syllabus) return <p className="text-sm text-gray-500">No syllabus selected.</p>;
         
         const CheckboxList = ({ items, field }: { items: string[], field: 'module' | 'contentArea' | 'outcome' | 'cognitiveVerb' }) => (

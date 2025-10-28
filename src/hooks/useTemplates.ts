@@ -18,20 +18,21 @@ export const useTemplates = () => {
             alert('Please provide a template name.');
             return false;
         }
-        if (state.questions.length === 0) {
+        const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+        if (!activeExam || activeExam.questions.length === 0) {
             alert('Cannot save an empty structure as a template.');
             return false;
         }
-        const newTemplates = { ...templates, [name]: { questions: state.questions, selectedSyllabus: state.selectedSyllabus } };
+        const newTemplates = { ...templates, [name]: { questions: activeExam.questions, selectedSyllabus: activeExam.selectedSyllabus } };
         saveTemplatesToStorage(newTemplates);
         return true;
     };
 
-    const loadTemplate = (name: string) => {
+    const loadTemplate = (name: string, examId: string) => {
         const template = templates[name];
         if (template) {
-            dispatch({ type: 'SET_QUESTIONS', payload: template.questions });
-            dispatch({ type: 'SET_SYLLABUS', payload: template.selectedSyllabus });
+            dispatch({ type: 'SET_QUESTIONS', payload: { examId, questions: template.questions } });
+            dispatch({ type: 'SET_SYLLABUS', payload: { examId, syllabus: template.selectedSyllabus } });
         }
     };
 

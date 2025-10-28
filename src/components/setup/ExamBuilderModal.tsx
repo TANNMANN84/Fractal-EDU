@@ -19,7 +19,7 @@ interface Section {
 }
 
 const ExamBuilderModal: React.FC<ExamBuilderModalProps> = ({ isOpen, onClose }) => {
-    const { dispatch } = useAppContext();
+    const { state, dispatch } = useAppContext();
     const [scaffold, setScaffold] = useState<Section[]>([{ name: 'Section I', type: 'mc', count: 20, marks: 1, questions: [] }]);
 
     const updateSection = (index: number, field: keyof Section, value: any) => {
@@ -81,7 +81,7 @@ const ExamBuilderModal: React.FC<ExamBuilderModalProps> = ({ isOpen, onClose }) 
         });
 
         const finalQuestions = updateParentQuestionData(newQuestions);
-        dispatch({ type: 'SET_QUESTIONS', payload: finalQuestions });
+        if (state.activeExamId) dispatch({ type: 'SET_QUESTIONS', payload: { examId: state.activeExamId, questions: finalQuestions } });
         onClose();
     };
 

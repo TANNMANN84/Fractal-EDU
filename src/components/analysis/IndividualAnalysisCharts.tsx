@@ -14,11 +14,13 @@ const IndividualAnalysisCharts: React.FC<IndividualAnalysisChartsProps> = ({
   selectedStudents,
 }) => {
   const { state } = useAppContext();
-  const { questions } = state;
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const questions = activeExam?.questions || [];
+  const examStudents = activeExam?.students || [];
 
   const { moduleData, contentData, outcomeData, verbData } = useMemo(
-    () => getAnalysisData(state.examStudents, questions, [], selectedStudents),
-    [selectedStudents, state.examStudents, questions]
+    () => getAnalysisData(examStudents, questions, [], selectedStudents),
+    [selectedStudents, examStudents, questions]
   );
 
   if (selectedStudents.length === 0) {

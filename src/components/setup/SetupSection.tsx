@@ -15,7 +15,14 @@ interface SetupSectionProps {
 
 const SetupSection: React.FC<SetupSectionProps> = ({ /* onFinalize */ }) => {
   const { state, dispatch } = useAppContext();
-  const { selectedSyllabus, structureLocked, questions } = state;
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+
+  if (!activeExam) {
+    // Optionally render a message or create a default exam
+    return <div className="text-center p-8">Please create or select an exam to begin.</div>;
+  }
+
+  const { selectedSyllabus, structureLocked, questions } = activeExam;
   const { templates, saveTemplate, loadTemplate, deleteTemplate } = useTemplates();
 
   const [isExamBuilderOpen, setIsExamBuilderOpen] = useState(false);
@@ -28,7 +35,7 @@ const SetupSection: React.FC<SetupSectionProps> = ({ /* onFinalize */ }) => {
 
 
   const handleSyllabusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    dispatch({ type: 'SET_SYLLABUS', payload: e.target.value });
+    dispatch({ type: 'SET_SYLLABUS', payload: { examId: activeExam.id, syllabus: e.target.value } });
   };
 
   const handleFinalize = () => {
@@ -36,7 +43,7 @@ const SetupSection: React.FC<SetupSectionProps> = ({ /* onFinalize */ }) => {
            alert("Please add at least one question to the exam structure.");
            return;
       }
-      dispatch({ type: 'SET_STRUCTURE_LOCKED', payload: true });
+      dispatch({ type: 'SET_STRUCTURE_LOCKED', payload: { examId: activeExam.id, locked: true } });
   };
 
    const openQuestionEditor = (questionId: string | null = null, parentId: string | null = null) => {
@@ -72,7 +79,9 @@ const SetupSection: React.FC<SetupSectionProps> = ({ /* onFinalize */ }) => {
     };
 
     const handleLoadTemplate = (name: string) => {
-        loadTemplate(name);
+        if (activeExam) {
+            loadTemplate(name, activeExam.id);
+        }
         setIsTemplateModalOpen(false);
     };
 

@@ -14,7 +14,10 @@ interface QuestionPerformance {
 
 const ProblemQuestionsSummary: React.FC = () => {
   const { state } = useAppContext();
-  const { examStudents, questions, activeTags } = state;
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const examStudents = activeExam?.students || [];
+  const questions = activeExam?.questions || [];
+  const { activeTags } = state;
 
   const problemQuestions = useMemo(() => {
     const activeStudents =

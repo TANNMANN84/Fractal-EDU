@@ -83,19 +83,27 @@ export interface RapidTest {
 // --- App Mode ---
 export type AppMode = 'exam' | 'rapidTest';
 
+// --- Exam Type ---
+export interface Exam {
+  id: string;
+  name: string;
+  questions: Question[];
+  students: Student[];
+  selectedSyllabus: string;
+  structureLocked: boolean;
+}
+
 // --- Global Application State ---
 export interface AppState {
   // Mode and Data
   appMode: AppMode;
   rapidTests: RapidTest[]; // Array of rapid tests
-  questions: Question[]; // Array of exam questions
-  examStudents: Student[]; // For senior exam analysis
+  exams: Exam[]; // Array of exams
+  activeExamId: string | null; // ID of the currently active exam
   rapidTestStudents: Student[]; // For junior pre/post tests
-  selectedSyllabus: string;
   // UI State
   deleteMode: boolean;
   selectedStudentId: string | null; // For exam data entry
-  structureLocked: boolean; // For exam setup
   activeTags: string[]; // For filtering analysis
   rankingSort: { key: string; direction: 'asc' | 'desc' }; // For exam ranking table
 }
@@ -105,9 +113,12 @@ export type AppAction =
   | { type: 'SET_STATE'; payload: AppState }
   | { type: 'SET_APP_MODE'; payload: AppMode }
   // Exam Actions
-  | { type: 'SET_SYLLABUS'; payload: string }
-  | { type: 'SET_QUESTIONS'; payload: Question[] }
-  | { type: 'SET_STRUCTURE_LOCKED'; payload: boolean }
+  | { type: 'ADD_EXAM'; payload: Exam }
+  | { type: 'SET_ACTIVE_EXAM'; payload: string | null }
+  | { type: 'SET_SYLLABUS'; payload: { examId: string; syllabus: string } }
+  | { type: 'SET_QUESTIONS'; payload: { examId: string; questions: Question[] } }
+  | { type: 'SET_STRUCTURE_LOCKED'; payload: { examId: string; locked: boolean } }
+  | { type: 'SET_EXAM_STUDENTS'; payload: { examId: string; students: Student[] } }
   // Student Actions (Shared)
   | { type: 'ADD_STUDENT'; payload: { mode: AppMode, student?: Student } }
   | { type: 'BULK_ADD_STUDENTS'; payload: { students: Student[], mode: AppMode } }

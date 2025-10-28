@@ -3,16 +3,20 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Student, AppState } from '../../types'; // Import AppState
+import IndividualAnalysisCharts from './IndividualAnalysisCharts';
+import { generateExamAnalysisReport } from '../../utils/pdfUtils';
 
 const IndividualAnalysis: React.FC = () => {
   const { state } = useAppContext();
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const examStudents = activeExam?.students || [];
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   const activeStudents = useMemo(() => {
-    return state.examStudents
+    return examStudents
       .filter((s: Student) => s.lastName && s.firstName)
       .sort((a: Student, b: Student) => a.lastName.localeCompare(b.lastName));
-  }, [state.examStudents]);
+  }, [examStudents]);
 
   const selectedStudents = useMemo(() => {
     return activeStudents.filter((s: Student) =>
@@ -40,6 +44,13 @@ const IndividualAnalysis: React.FC = () => {
     return 'Individual Student Analysis';
   };
 
+  const handleGenerateReport = () => {
+    if (selectedStudents.length === 0) return;
+    const isIndividual = selectedStudents.length === 1;
+    const title = isIndividual ? `Report for ${selectedStudents[0].firstName} ${selectedStudents[0].lastName}` : 'Comparative Analysis';
+    generateExamAnalysisReport(isIndividual, title);
+  };
+
   if (activeStudents.length === 0) {
     return null;
   }
@@ -52,6 +63,12 @@ const IndividualAnalysis: React.FC = () => {
           className="text-xl font-semibold text-white"
         >
           {getTitle()}
+        </h3>
+        <h3
+          onClick={handleGenerateReport}
+          className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer"
+        >
+          Generate PDF
         </h3>
       </div>
       <label
@@ -74,7 +91,7 @@ const IndividualAnalysis: React.FC = () => {
         ))}
       </select>
       <div id="individual-analysis-content" className="mt-4">
-        {/* The charts for this view were removed along with the PDF export feature. */}
+        <IndividualAnalysisCharts selectedStudents={selectedStudents} />
       </div>
     </div>
   );

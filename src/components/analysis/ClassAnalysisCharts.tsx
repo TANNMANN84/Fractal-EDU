@@ -4,12 +4,15 @@ import React, { useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { getAnalysisData } from '../../utils/analysisHelpers';
 import AnalysisChart from './AnalysisChart';
-import { Student } from '../../types';
+import BandChart from './BandChart'; // Import the new component
+import { Student } from '@/types';
 
 const ClassAnalysisCharts: React.FC = () => {
   // *** CORRECT USAGE: Call the hook ***
   const { state } = useAppContext();
-  const { examStudents, questions } = state;
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const examStudents = activeExam?.students || [];
+  const questions = activeExam?.questions || [];
 
   const { moduleData, contentData, outcomeData, verbData, bandData } =
     useMemo(
@@ -51,11 +54,10 @@ const ClassAnalysisCharts: React.FC = () => {
         data={verbData}
         chartId="classVerbChart"
       />
-      <AnalysisChart
+      <BandChart
         title="Class Performance Bands"
         data={bandData}
         chartId="classBandChart"
-        isBandChart={true}
       />
     </div>
   );

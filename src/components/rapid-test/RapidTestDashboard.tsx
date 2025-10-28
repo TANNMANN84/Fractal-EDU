@@ -1,12 +1,12 @@
 // src/components/rapid-test/RapidTestDashboard.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { RapidTest, RapidQuestion, RapidQuestionType, AppState } from '../../types'; // Import necessary types
 import RapidTestEditor from './RapidTestEditor';
 import RapidEntryView from './RapidEntryView';
 import StudentList from '../entry/StudentList';
-import RapidTestAnalysis from './RapidTestAnalysis';
+const RapidTestAnalysis = lazy(() => import('./RapidTestAnalysis'));
 
 // --- Helper Function to create a question based on type ---
 const createRapidQuestion = (type: RapidQuestionType, defaultMarks: number): RapidQuestion => ({
@@ -52,12 +52,46 @@ const RapidTestDashboard: React.FC = () => {
   const [markingTestId, setMarkingTestId] = useState<string | null>(null);
   const [analysingTestId, setAnalysingTestId] = useState<string | null>(null); // State for analysis view
 
-  useEffect(() => {
-    // console.log('Dashboard State:', { tests: rapidTests.length, editing: editingTest?.id, marking: markingTestId, analysing: analysingTestId });
-  }, [rapidTests.length, editingTest, markingTestId, analysingTestId]);
+  const handleCreateNew = () => {
+    const newTest: RapidTest = {
+      id: crypto.randomUUID(),
+      name: 'New Blank Test',
+      questions: [],
+      results: [],
+    };
+    setEditingTest(newTest);
+  };
 
-  const handleCreateNew = () => { /* ... (keep existing) ... */ };
-  const handleCreateFromTemplate = () => { /* ... (keep existing) ... */ };
+  const handleCreateFromTemplate = () => {
+    const templateTest = createDiagnosticTemplate();
+    setEditingTest(templateTest);
+  };
+
+  const handleExportTest = (testToExport: RapidTest) => {
+    // Create a clean version of the test, without results
+    const testTemplate = {
+      ...testToExport,
+      results: [],
+    };
+    const defaultFileName = `rapid-test-${testToExport.name.replace(/ /g, '_')}.json`;
+    const fileName = window.prompt('Enter a filename for the test template:', defaultFileName);
+
+    if (!fileName) {
+      return;
+    }
+
+    const jsonString = JSON.stringify(testTemplate, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleEdit = (test: RapidTest) => { setMarkingTestId(null); setAnalysingTestId(null); setEditingTest(test); };
   const handleDelete = (testId: string) => { if (window.confirm('Delete test?')) { dispatch({ type: 'DELETE_RAPID_TEST', payload: testId }); if (editingTest?.id === testId) setEditingTest(null); if (markingTestId === testId) setMarkingTestId(null); if (analysingTestId === testId) setAnalysingTestId(null); } };
   const handleSave = (updatedTest: RapidTest) => { dispatch({ type: 'UPDATE_RAPID_TEST', payload: updatedTest }); setEditingTest(null); };
@@ -112,7 +146,11 @@ const RapidTestDashboard: React.FC = () => {
   if (analysingTestId) { // Added Analysis view placeholder
     const testToAnalyse = rapidTests.find((t: RapidTest) => t.id === analysingTestId); // Add type
     if (!testToAnalyse) { return ( <div className="text-red-400 p-4">Error: Test not found. <button onClick={handleBackToDashboard}>Back</button></div> ); }
-    return <RapidTestAnalysis test={testToAnalyse} onBack={handleBackToDashboard} />;
+    return (
+      <Suspense fallback={<div className="text-center p-8">Loading Analysis...</div>}>
+        <RapidTestAnalysis test={testToAnalyse} onBack={handleBackToDashboard} />
+      </Suspense>
+    );
   }
   if (editingTest) {
     return ( <RapidTestEditor test={editingTest} onSave={handleSave} onCancel={handleBackToDashboard} /> ); // Use unified back handler
@@ -149,6 +187,7 @@ const RapidTestDashboard: React.FC = () => {
                         <button onClick={() => handleStartMarking(test.id)} className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700" title="Enter Results" > Mark </button>
                         {/* --- WIRE UP Analyse Button --- */}
                         <button onClick={() => handleStartAnalysis(test.id)} className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" title="View Growth Analysis" > Analyse </button>
+                        <button onClick={() => handleExportTest(test)} className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500" title="Export Test Structure">Export</button>
                         {/* --- END WIRE UP --- */}
                         <button onClick={() => handleEdit(test)} className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500" title="Edit Structure" > Edit </button>
                         <button onClick={() => handleDelete(test.id)} className="px-3 py-1.5 text-sm font-medium rounded-md text-red-400 hover:bg-red-800" title="Delete Test" > Delete </button>

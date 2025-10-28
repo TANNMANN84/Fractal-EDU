@@ -2,22 +2,20 @@
 
 import React, { createContext, useReducer, useContext, useEffect, Dispatch, ReactNode } from 'react';
 import { produce, Draft } from 'immer';
-import { AppState, AppAction, Question, Student, RapidTest, RapidTestResult } from '../types'; // Import all needed types
+import { AppState, AppAction, Exam, Question, Student, RapidTest, RapidTestResult } from '../types'; // Import all needed types
 import { createStudentObject, updateParentQuestionData } from '../utils/helpers'; // Assuming createQuestionObject is not needed here
 
 // Define initial state matching AppState structure
 const initialState: AppState = {
   appMode: 'exam',
   rapidTests: [],
-  questions: [], // exam questions
-  examStudents: [],
+  exams: [],
+  activeExamId: null,
   rapidTestStudents: [],
-  selectedSyllabus: '',
   deleteMode: false,
   selectedStudentId: null,
-  structureLocked: false,
   activeTags: [],
-  rankingSort: { key: 'rank', direction: 'asc' },
+  rankingSort: { key: 'rank', direction: 'asc' }
 };
 
 const appReducer = (state: AppState, action: AppAction): AppState => {
@@ -25,32 +23,79 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     switch (action.type) {
       case 'SET_STATE':
         // Immer special case: return the new state directly
-        // Make sure the payload conforms to AppState. Basic check for essential properties.
-        if (action.payload && 'appMode' in action.payload && 'questions' in action.payload && 'examStudents' in action.payload) {
-            // Merge with initial state to ensure all keys exist
-            return { ...initialState, ...action.payload };
+        if (action.payload) {
+            const loadedPayload = action.payload as AppState; // Cast for easier access
+
+            // --- MIGRATION LOGIC for single-exam to multi-exam structure ---
+            if (!loadedPayload.exams && (loadedPayload as any).questions) {
+              console.log("Migrating legacy single-exam state to multi-exam structure.");
+              const legacyExam: Exam = {
+                id: crypto.randomUUID(),
+                name: 'Imported Exam',
+                questions: (loadedPayload as any).questions,
+                students: (loadedPayload as any).examStudents || (loadedPayload as any).students || [],
+                selectedSyllabus: (loadedPayload as any).selectedSyllabus || '',
+                structureLocked: (loadedPayload as any).structureLocked || false,
+              };
+              loadedPayload.exams = [legacyExam];
+              loadedPayload.activeExamId = legacyExam.id;
+
+              // Delete old top-level properties
+              delete (loadedPayload as any).questions;
+              delete (loadedPayload as any).examStudents;
+              delete (loadedPayload as any).students;
+              delete (loadedPayload as any).selectedSyllabus;
+              delete (loadedPayload as any).structureLocked;
+            }
+
+            // Provide default appMode if missing (for older exports)
+            const finalPayload = { ...loadedPayload, appMode: loadedPayload.appMode || initialState.appMode };
+
+            return { ...initialState, ...finalPayload };
         }
-        console.error("SET_STATE received invalid payload:", action.payload);
         return state; // Return current state if payload is invalid
 
 
       // --- Exam Mode Actions ---
+      case 'ADD_EXAM':
+        draft.exams.push(action.payload);
+        draft.activeExamId = action.payload.id; // Make the new exam active
+        break;
+      case 'SET_ACTIVE_EXAM':
+        draft.activeExamId = action.payload;
+        draft.selectedStudentId = null; // Reset student selection when changing exams
+        break;
       case 'SET_SYLLABUS':
-        draft.selectedSyllabus = action.payload;
+        const examToUpdateSyllabus = draft.exams.find(e => e.id === action.payload.examId);
+        if (examToUpdateSyllabus) {
+          examToUpdateSyllabus.selectedSyllabus = action.payload.syllabus;
+        }
         break;
       case 'SET_QUESTIONS':
-        // Ensure payload is an array and update parent data
-        draft.questions = updateParentQuestionData(Array.isArray(action.payload) ? action.payload : []);
+        const examToUpdateQuestions = draft.exams.find(e => e.id === action.payload.examId);
+        if (examToUpdateQuestions) {
+          examToUpdateQuestions.questions = updateParentQuestionData(Array.isArray(action.payload.questions) ? action.payload.questions : []);
+        }
         break;
       case 'SET_STRUCTURE_LOCKED':
-        draft.structureLocked = action.payload;
+        const examToLock = draft.exams.find(e => e.id === action.payload.examId);
+        if (examToLock) {
+          examToLock.structureLocked = action.payload.locked;
+        }
+        break;
+      case 'SET_EXAM_STUDENTS':
+        const examToSetStudents = draft.exams.find(e => e.id === action.payload.examId);
+        if (examToSetStudents) {
+          examToSetStudents.students = action.payload.students;
+        }
         break;
 
       // --- Student Actions ---
       case 'ADD_STUDENT': {
         const { mode, student } = action.payload;
         const newStudent = student || createStudentObject(); // Use passed student or create new
-        const studentList = mode === 'exam' ? draft.examStudents : draft.rapidTestStudents;
+        const activeExam = draft.exams.find(e => e.id === draft.activeExamId);
+        const studentList = mode === 'exam' ? (activeExam ? activeExam.students : draft.rapidTestStudents) : draft.rapidTestStudents;
         studentList.push(newStudent);
         if (mode === 'exam') {
           draft.selectedStudentId = newStudent.id;
@@ -60,31 +105,39 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
        case 'BULK_ADD_STUDENTS':
          const { students, mode: bulkMode } = action.payload;
          // Ensure payload is an array of valid Student objects
+         const activeExam = draft.exams.find(e => e.id === draft.activeExamId);
          if (Array.isArray(students)) {
-            const studentList = bulkMode === 'exam' ? draft.examStudents : draft.rapidTestStudents;
-            studentList.push(...students);
+            // Correctly reference the students array within the active exam
+            const studentList = bulkMode === 'exam' ? (activeExam ? activeExam.students : undefined) : draft.rapidTestStudents;
+
+            if (studentList) studentList.push(...students);
          }
          break;
       case 'UPDATE_STUDENT': {
         const { student, mode: updateMode } = action.payload;
-        const studentList = updateMode === 'exam' ? draft.examStudents : draft.rapidTestStudents;
+        const studentList = updateMode === 'exam' ? draft.exams.find(e => e.id === draft.activeExamId)?.students : draft.rapidTestStudents;
+        if (!studentList) break;
         const studentIndex = studentList.findIndex(s => s.id === student.id);
         if (studentIndex !== -1) {
           studentList[studentIndex] = student;
         }
         break;
       }
-      case 'REMOVE_STUDENT':
+      case 'REMOVE_STUDENT': {
         const { studentId, mode: removeMode } = action.payload;
         if (removeMode === 'exam') {
-          draft.examStudents = draft.examStudents.filter(s => s.id !== studentId);
-          if (draft.selectedStudentId === studentId) {
-            draft.selectedStudentId = draft.examStudents[0]?.id || null;
+          const activeExam = draft.exams.find(e => e.id === draft.activeExamId);
+          if (activeExam) {
+            activeExam.students = activeExam.students.filter(s => s.id !== studentId);
+            if (draft.selectedStudentId === studentId) {
+              draft.selectedStudentId = activeExam.students[0]?.id || null;
+            }
           }
         } else {
           draft.rapidTestStudents = draft.rapidTestStudents.filter(s => s.id !== studentId);
         }
         break;
+      }
       case 'SET_SELECTED_STUDENT':
         draft.selectedStudentId = action.payload;
         break;
@@ -203,8 +256,7 @@ const loadState = (): AppState => {
     const mergedState = {
         ...initialState,
         ...loaded,
-        questions: Array.isArray(loaded.questions) ? loaded.questions : [],
-        examStudents: Array.isArray(loaded.examStudents) ? loaded.examStudents : (Array.isArray(loaded.students) ? loaded.students : []), // Migration from old `students` key
+        exams: Array.isArray(loaded.exams) ? loaded.exams : [],
         rapidTestStudents: Array.isArray(loaded.rapidTestStudents) ? loaded.rapidTestStudents : [],
         rapidTests: Array.isArray(loaded.rapidTests) ? loaded.rapidTests : [],
         activeTags: Array.isArray(loaded.activeTags) ? loaded.activeTags : [],

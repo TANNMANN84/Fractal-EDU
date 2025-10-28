@@ -1,6 +1,7 @@
 // src/components/rapid-test/RapidTestAnalysis.tsx
 
 import React, { useMemo, useCallback, useState } from 'react';
+import { generateRapidTestReport, generateStudentReport } from '../../utils/pdfUtils';
 import { useAppContext } from '../../context/AppContext';
 import { RapidQuestion, RapidTest, Student, AppState } from '../../types'; import BarChart, { BarChartData } from './BarChart';
 
@@ -28,12 +29,30 @@ interface QuestionAnalysisData {
   maxMarks: number;
 }
 
-const RapidTestAnalysis: React.FC<RapidTestAnalysisProps> = ({ test, onBack }) => {
+const RapidTestAnalysis: React.FC<RapidTestAnalysisProps> = ({ test, onBack }) => { // eslint-disable-line
   const { state } = useAppContext();
-  const students = state.rapidTestStudents.filter(s => s.lastName || s.firstName).sort((a,b) => a.lastName.localeCompare(b.lastName));
+  const allStudents = state.rapidTestStudents;
+
+  const [selectedClass, setSelectedClass] = useState<string>('all');
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('table');
+
+  // Get unique class names for the dropdown
+  const classNames = useMemo(() => {
+    const classes = new Set<string>();
+    allStudents.forEach(s => {
+      if (s.className) classes.add(s.className);
+    });
+    return Array.from(classes).sort();
+  }, [allStudents]);
+
+  // Filter students based on selected class
+  const students = useMemo(() => {
+    const baseStudents = allStudents.filter(s => s.lastName || s.firstName).sort((a,b) => a.lastName.localeCompare(b.lastName));
+    if (selectedClass === 'all') return baseStudents;
+    return baseStudents.filter(s => s.className === selectedClass);
+  }, [allStudents, selectedClass]);
 
   // Helper function to get score for a rapid question, moved here from AppContext
   const getScoreForRapidQuestion = useCallback((question: RapidQuestion, response: any): number => {
@@ -153,9 +172,94 @@ const RapidTestAnalysis: React.FC<RapidTestAnalysisProps> = ({ test, onBack }) =
     return <span className={color}>{sign}{growth.toFixed(1)}%</span>;
   };
 
+  const handleExportClassReport = () => {
+    generateRapidTestReport(test, analysisData, questionAnalysisData, classAverages);
+  };
+
+  const handleExportStudentReport = () => {
+    if (!selectedStudent) return;
+    // We can pass preResult and postResult directly as they are already calculated
+    generateStudentReport(test, selectedStudent, preResult, postResult, getScoreForRapidQuestion);
+  };
+
   const selectedStudent = useMemo(() => students.find(s => s.id === selectedStudentId), [students, selectedStudentId]);
   const preResult = useMemo(() => test.results.find(r => r.studentId === selectedStudentId && r.type === 'pre'), [test.results, selectedStudentId]);
   const postResult = useMemo(() => test.results.find(r => r.studentId === selectedStudentId && r.type === 'post'), [test.results, selectedStudentId]);
+
+  const studentQuestionChartData: BarChartData[] = useMemo(() => {
+    if (!test || !selectedStudentId) return [];
+    return test.questions.map((q, index) => {
+      const preResponse = preResult?.responses[q.id];
+      const postResponse = postResult?.responses[q.id];
+
+      const preScore = preResponse !== undefined ? getScoreForRapidQuestion(q, preResponse) : 0;
+      const postScore = postResponse !== undefined ? getScoreForRapidQuestion(q, postResponse) : 0;
+
+      const prePercentage = q.maxMarks > 0 ? (preScore / q.maxMarks) * 100 : 0;
+      const postPercentage = q.maxMarks > 0 ? (postScore / q.maxMarks) * 100 : 0;
+
+      return {
+        label: `Q${index + 1}`,
+        preValue: prePercentage,
+        postValue: postPercentage,
+      };
+    });
+  }, [test, selectedStudentId, preResult, postResult, getScoreForRapidQuestion]);
+
+  // --- Render Student Drill Down View ---
+  if (selectedStudentId) {
+    return (
+      <div className="bg-gray-800 border border-gray-700 p-6 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-semibold text-white">Detailed Analysis for {selectedStudent?.firstName} {selectedStudent?.lastName}</h3>
+          <div className="flex gap-2">
+            <button onClick={handleExportStudentReport} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+              Export PDF
+            </button>
+            <button onClick={() => setSelectedStudentId(null)} className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+              Back to Class View
+            </button>
+          </div>
+        </div>
+        <div className="space-y-8">
+          <BarChart data={studentQuestionChartData} title="Score per Question" />
+          <div>
+            <h4 className="text-lg font-semibold text-gray-200 mb-3">Detailed Answers</h4>
+            <div className="overflow-x-auto rounded-lg border border-gray-700">
+              <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-700/50">
+                  <tr>
+                    <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-6">Question</th>
+                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Pre-Test Answer</th>
+                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Pre-Test Score</th>
+                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Post-Test Answer</th>
+                    <th className="px-3 py-3.5 text-center text-sm font-semibold text-white">Post-Test Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
+                  {test.questions.map(q => {
+                    const preResponse = preResult?.responses[q.id];
+                    const postResponse = postResult?.responses[q.id];
+                    const preScore = preResponse !== undefined ? getScoreForRapidQuestion(q, preResponse) : null;
+                    const postScore = postResponse !== undefined ? getScoreForRapidQuestion(q, postResponse) : null;
+                    return (
+                      <tr key={q.id} className="hover:bg-gray-700/40">
+                        <td className="py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">{q.prompt}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300 text-center">{preResponse ?? '-'}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-cyan-300 text-center">{preScore !== null ? `${preScore} / ${q.maxMarks}` : '-'}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300 text-center">{postResponse ?? '-'}</td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-cyan-300 text-center">{postScore !== null ? `${postScore} / ${q.maxMarks}` : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // --- Render Main Analysis View ---
   return (
@@ -163,12 +267,26 @@ const RapidTestAnalysis: React.FC<RapidTestAnalysisProps> = ({ test, onBack }) =
       <div className="flex justify-between items-start mb-6">
         <div className="flex-grow">
           <h2 className="text-2xl font-semibold text-white">Analysis for {test.name}</h2>
-          <div className="flex rounded-md shadow-sm bg-gray-700 p-0.5 mt-2">
-            <button onClick={() => setViewMode('table')} className={`px-3 py-1 text-sm font-medium rounded-md ${viewMode === 'table' ? 'text-white bg-indigo-600' : 'text-gray-300 hover:bg-gray-600'}`}>Table View</button>
-            <button onClick={() => setViewMode('chart')} className={`px-3 py-1 text-sm font-medium rounded-md ${viewMode === 'chart' ? 'text-white bg-indigo-600' : 'text-gray-300 hover:bg-gray-600'}`}>Chart View</button>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="flex rounded-md shadow-sm bg-gray-700 p-0.5">
+              <button onClick={() => setViewMode('table')} className={`px-3 py-1 text-sm font-medium rounded-md ${viewMode === 'table' ? 'text-white bg-indigo-600' : 'text-gray-300 hover:bg-gray-600'}`}>Table View</button>
+              <button onClick={() => setViewMode('chart')} className={`px-3 py-1 text-sm font-medium rounded-md ${viewMode === 'chart' ? 'text-white bg-indigo-600' : 'text-gray-300 hover:bg-gray-600'}`}>Chart View</button>
+            </div>
+            {classNames.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="class-filter" className="text-sm text-gray-400">Filter by Class:</label>
+                <select id="class-filter" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="bg-gray-700 text-white text-sm rounded-md p-1 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+                  <option value="all">All Students</option>
+                  {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
+            <button onClick={handleExportClassReport} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+              Export PDF
+            </button>
             <button onClick={onBack} className="px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Back to Dashboard</button>
         </div>
       </div>

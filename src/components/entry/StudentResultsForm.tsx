@@ -1,18 +1,19 @@
 import React, { useMemo, useEffect, useRef } from 'react';
-import { produce } from 'immer';
+import { Draft, produce } from 'immer';
 import { useAppContext } from '../../context/AppContext';
 import { getLeafQuestions, getColorForScore, createStudentObject } from '../../utils/helpers';
 import { Student } from '../../types';
 
 const StudentResultsForm: React.FC = () => {
     const { state, dispatch } = useAppContext();
-    const activeStudent = state.examStudents.find(s => s.id === state.selectedStudentId);
+    const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+    const activeStudent = activeExam?.students.find((s: Student) => s.id === state.selectedStudentId);
     const formRef = useRef<HTMLDivElement>(null);
     
-    const leafQuestions = useMemo(() => getLeafQuestions(state.questions), [state.questions]);
+    const leafQuestions = useMemo(() => getLeafQuestions(activeExam?.questions || []), [activeExam?.questions]);
     
     const { totalScore, totalMax } = useMemo(() => { // Added Question type
-        if (!activeStudent) return { totalScore: 0, totalMax: 0 }; 
+        if (!activeStudent) return { totalScore: 0, totalMax: 0 };
         const totalMax = leafQuestions.reduce((sum, q) => sum + Number(q.maxMarks || 0), 0);
         const totalScore = leafQuestions.reduce((sum, q) => sum + (activeStudent.responses[q.id] || 0), 0);
         return { totalScore, totalMax };
@@ -20,8 +21,8 @@ const StudentResultsForm: React.FC = () => {
 
 
     const handleStudentFieldChange = (field: 'lastName' | 'firstName' | 'tags', value: string) => {
-        if (!activeStudent) return;
-        const updatedStudent = produce(activeStudent, draft => {
+        if (!activeStudent || !activeExam) return;
+        const updatedStudent = produce(activeStudent, (draft: Draft<Student>) => {
             if (field === 'tags') {
                 draft.tags = value.split(',').map(tag => tag.trim()).filter(Boolean);
             } else {
@@ -32,12 +33,12 @@ const StudentResultsForm: React.FC = () => {
     };
     
     const handleScoreChange = (questionId: string, value: string) => {
-        if (!activeStudent) return;
+        if (!activeStudent || !activeExam) return;
         const question = leafQuestions.find(q => q.id === questionId);
         if (!question) return;
 
         const score = value === '' ? null : parseFloat(value);
-        const updatedStudent = produce(activeStudent, draft => {
+        const updatedStudent = produce(activeStudent, (draft: Draft<Student>) => {
             if (score === null) {
                 delete draft.responses[questionId];
             } else {
@@ -48,12 +49,12 @@ const StudentResultsForm: React.FC = () => {
     };
     
     const handleMcqChange = (questionId: string, value: string) => {
-        if (!activeStudent) return;
+        if (!activeStudent || !activeExam) return;
         const question = leafQuestions.find(q => q.id === questionId);
         if (!question) return;
 
         const answer = value.toUpperCase();
-        const updatedStudent = produce(activeStudent, draft => {
+        const updatedStudent = produce(activeStudent, (draft: Draft<Student>) => {
             if (answer === '') {
                 delete draft.mcqResponses[questionId];
                 delete draft.responses[questionId];
@@ -66,16 +67,17 @@ const StudentResultsForm: React.FC = () => {
     };
 
     const navigateStudent = (direction: 'next' | 'prev') => {
-        const currentIndex = state.examStudents.findIndex(s => s.id === state.selectedStudentId);
+        if (!activeExam) return;
+        const currentIndex = activeExam.students.findIndex((s: Student) => s.id === state.selectedStudentId);
         if (direction === 'next') {
-            if (currentIndex < state.examStudents.length - 1) {
-                dispatch({ type: 'SET_SELECTED_STUDENT', payload: state.examStudents[currentIndex + 1].id });
+            if (currentIndex < activeExam.students.length - 1) {
+                dispatch({ type: 'SET_SELECTED_STUDENT', payload: activeExam.students[currentIndex + 1].id });
             } else {
                 dispatch({ type: 'ADD_STUDENT', payload: { mode: 'exam' }});
             }
         } else {
             if (currentIndex > 0) {
-                 dispatch({ type: 'SET_SELECTED_STUDENT', payload: state.examStudents[currentIndex - 1].id });
+                 dispatch({ type: 'SET_SELECTED_STUDENT', payload: activeExam.students[currentIndex - 1].id });
             }
         }
     };
@@ -156,7 +158,7 @@ const StudentResultsForm: React.FC = () => {
             </div>
 
             <div className="flex justify-between mt-6 pt-6 border-t border-gray-700">
-                <button onClick={() => navigateStudent('prev')} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-500 disabled:opacity-50" disabled={state.examStudents.findIndex(s => s.id === state.selectedStudentId) === 0}>Previous</button>
+                <button onClick={() => navigateStudent('prev')} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-500 disabled:opacity-50" disabled={activeExam?.students.findIndex((s: Student) => s.id === state.selectedStudentId) === 0}>Previous</button>
                 <button onClick={() => navigateStudent('next')} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">Save & Next</button>
             </div>
         </div>

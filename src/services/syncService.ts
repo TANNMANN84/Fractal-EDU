@@ -24,13 +24,20 @@ export const logout = async () => {
  */
 export const saveDataToCloud = async (data: AppState): Promise<{ success: boolean }> => {
   try {
-    const jsonString = JSON.stringify(data, null, 2); // Pretty-print the JSON
+    const defaultFileName = `fractal-edu-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const fileName = window.prompt('Enter a filename for the backup:', defaultFileName);
+
+    if (!fileName) { // User cancelled the prompt
+      return { success: false };
+    }
+
+    const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fractal-edu-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName.endsWith('.json') ? fileName : `${fileName}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

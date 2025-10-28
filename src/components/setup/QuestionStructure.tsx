@@ -1,6 +1,7 @@
 // src/components/setup/QuestionStructure.tsx
 
 import React from 'react';
+import { produce } from 'immer';
 import { useAppContext } from '../../context/AppContext';
 import { Question } from '../../types';
 // Make sure updateParentQuestionData is correctly implemented in helpers
@@ -14,7 +15,8 @@ interface QuestionStructureProps {
 
 const QuestionStructure: React.FC<QuestionStructureProps> = ({ onEdit, onAddSub }) => {
   const { state, dispatch } = useAppContext();
-  const { questions } = state;
+  const activeExam = state.activeExamId ? state.exams.find(e => e.id === state.activeExamId) : null;
+  const questions = activeExam?.questions || [];
 
    const handleRemove = (id: string) => {
         const removeRecursively = (qs: Question[], targetId: string): Question[] => {
@@ -31,7 +33,7 @@ const QuestionStructure: React.FC<QuestionStructureProps> = ({ onEdit, onAddSub 
 
         // Renumber top-level questions if a top-level was removed
         // Check if the removed ID belonged to a top-level question in the *original* state
-        const wasTopLevel = state.questions.some(q => q.id === id);
+        const wasTopLevel = questions.some((q: Question) => q.id === id);
         if (wasTopLevel) {
              updatedQuestions = updatedQuestions.map((q, index) => ({
                  ...q,
@@ -44,7 +46,7 @@ const QuestionStructure: React.FC<QuestionStructureProps> = ({ onEdit, onAddSub 
        updatedQuestions = updateParentQuestionData(updatedQuestions); 
 
 
-        dispatch({ type: 'SET_QUESTIONS', payload: updatedQuestions });
+        if (activeExam) dispatch({ type: 'SET_QUESTIONS', payload: { examId: activeExam.id, questions: updatedQuestions } });
     };
 
 
