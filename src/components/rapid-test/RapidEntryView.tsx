@@ -1,6 +1,6 @@
 // src/components/rapid-test/RapidEntryView.tsx
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'; // Added useMemo
 import { useAppContext } from '../../context/AppContext';
 import { RapidTest, Student, RapidQuestion, RapidTestResult, RapidQuestionType } from '../../types';
 
@@ -16,12 +16,43 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
   const [responses, setResponses] = useState<RapidTestResult['responses']>({});
   const formRef = useRef<HTMLDivElement>(null); // Ref for the form area
 
+  // --- New State for Class Filter ---
+  const [selectedClass, setSelectedClass] = useState<string>('all');
+
   const test = state.rapidTests.find(t => t.id === testId);
-  const students = state.rapidTestStudents.filter(s => s.lastName || s.firstName).sort((a,b) => a.lastName.localeCompare(b.lastName)); // Get sorted, named students
+  const allStudents = state.rapidTestStudents; // Get all rapid test students initially
 
-  const currentStudent = students[currentStudentIndex];
+  // --- Get unique class names for the dropdown ---
+  const classNames = useMemo(() => {
+    const classes = new Set<string>();
+    allStudents.forEach(s => {
+      if (s.className) classes.add(s.className);
+    });
+    return Array.from(classes).sort();
+  }, [allStudents]);
 
-  // Load existing responses when student or testType changes
+  // --- Filter students based on selected class ---
+  const students = useMemo(() => {
+    const baseStudents = allStudents
+        .filter(s => s.lastName || s.firstName) // Only named students
+        .sort((a,b) => a.lastName.localeCompare(b.lastName)); // Sort alphabetically
+
+    if (selectedClass === 'all') {
+        return baseStudents;
+    }
+    return baseStudents.filter(s => s.className === selectedClass);
+  }, [allStudents, selectedClass]);
+
+
+  // --- Handle Class Selection Change ---
+  const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedClass(e.target.value);
+    setCurrentStudentIndex(0); // Reset index when class changes
+  };
+
+  const currentStudent = students[currentStudentIndex]; // Now uses the filtered list
+
+  // Load existing responses when student, testType, or class changes
   useEffect(() => {
     if (!test || !currentStudent) {
         setResponses({});
@@ -32,10 +63,10 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
       r => r.studentId === currentStudent.id && r.type === testType
     );
     setResponses(existingResult ? existingResult.responses : {});
-    // Focus first input on student/type change
+    // Focus first input on student/type/class change
     focusFirstInput();
 
-  }, [currentStudentIndex, testType, test, currentStudent?.id]); // Added currentStudent.id dependency
+  }, [currentStudentIndex, testType, test, currentStudent?.id, selectedClass]); // Added selectedClass dependency
 
 
   const focusFirstInput = () => {
@@ -87,15 +118,15 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
       },
     });
 
-    // Move to next student
+    // Move to next student WITHIN THE FILTERED LIST
     if (currentStudentIndex < students.length - 1) {
       setCurrentStudentIndex(prev => prev + 1);
     } else {
       // Optionally go back or show completion message
-      alert('Finished marking last student!');
+      alert(`Finished marking last student in ${selectedClass === 'all' ? 'all classes' : 'class ' + selectedClass}!`);
       // onBack(); // Example: Go back after last student
     }
-  }, [test, currentStudent, testType, responses, currentStudentIndex, students.length, dispatch, onBack]);
+  }, [test, currentStudent, testType, responses, currentStudentIndex, students.length, dispatch, onBack, selectedClass]); // Added selectedClass
 
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, questionIndex: number) => {
@@ -147,13 +178,14 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
         const currentElementIndex = formElements.findIndex(el => el === e.target);
         const nextElement = formElements[currentElementIndex + 1];
 
-        if (nextElement) { nextElement.focus(); nextElement.select(); } 
+        if (nextElement) { nextElement.focus(); nextElement.select(); }
         else if (isLastQuestion) { handleSaveAndNext(); }
     }
-  }, [test?.questions, handleSaveAndNext, students.length, currentStudentIndex, dispatch, onBack, responses, testType, currentStudent]);
+    // Need to include all dependencies used inside useCallback
+  }, [test?.questions, handleSaveAndNext]);
 
 
-  // Render Input based on Question Type
+  // Render Input based on Question Type (No changes needed here)
    const renderQuestionInput = (q: RapidQuestion, index: number) => {
     const value = responses[q.id] ?? ''; // Keep this for initial value render
 
@@ -232,11 +264,42 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
 
 
   if (!test) return <p className="text-red-400">Error: Test not found.</p>;
-  if (!currentStudent) return <p className="text-gray-400">No students available to mark.</p>;
+  // Adjusted message for filtered list
+  if (students.length === 0) return (
+        <div className="flex flex-col md:flex-row gap-6">
+            <div className="md:w-1/4 bg-gray-800 border border-gray-700 p-4 rounded-lg h-fit">
+                {/* Still show class filter even if no students match */}
+                <h2 className="text-xl font-semibold text-white mb-2">Class List</h2>
+                 {classNames.length > 0 && (
+                    <div className="mb-4">
+                        <label htmlFor="class-filter-entry" className="block text-sm font-medium text-gray-400 mb-1">Filter by Class:</label>
+                        <select id="class-filter-entry" value={selectedClass} onChange={handleClassChange} className="w-full bg-gray-700 text-white text-sm rounded-md p-1 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="all">All Students</option>
+                        {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                    </div>
+                )}
+                <p className="text-gray-400 text-center py-4">
+                  {selectedClass === 'all' ? 'No students available to mark.' : `No students found in class '${selectedClass}'.`}
+                </p>
+                <button onClick={onBack} className="mt-4 w-full px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                    Back to Dashboard
+                </button>
+            </div>
+            <div className="md:w-3/4"> {/* Placeholder for right panel */}
+                 <p className="text-gray-400 text-center py-16">Select a class with students to begin marking.</p>
+            </div>
+        </div>
+   );
 
-  // Calculate progress
-  const markedStudents = new Set(test.results.filter(r => r.type === testType).map(r => r.studentId));
+  // Calculate progress based on the filtered student list
+  const markedStudents = new Set(
+    test.results
+      .filter(r => r.type === testType && students.some(s => s.id === r.studentId)) // Filter results for current class
+      .map(r => r.studentId)
+    );
   const progressPercent = students.length > 0 ? (markedStudents.size / students.length) * 100 : 0;
+
 
   // Calculate total possible marks for percentage calculation
   const totalPossibleMarks = test.questions.reduce((sum, q) => sum + (q.maxMarks || 0), 0);
@@ -246,7 +309,7 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
     <div className="flex flex-col md:flex-row gap-6">
       {/* Panel 1: Class List & Progress */}
       <div className="md:w-1/4 bg-gray-800 border border-gray-700 p-4 rounded-lg h-fit">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-2"> {/* Reduced bottom margin */}
             <h2 className="text-xl font-semibold text-white">Class List</h2>
              {/* Pre/Post Toggle */}
             <div className="flex rounded-md shadow-sm bg-gray-700 p-0.5">
@@ -255,7 +318,20 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
              </div>
         </div>
 
-        {/* Overall Progress */}
+        {/* --- ADDED Class Filter Dropdown --- */}
+        {classNames.length > 0 && (
+            <div className="mb-4">
+                <label htmlFor="class-filter-entry" className="block text-sm font-medium text-gray-400 mb-1">Filter by Class:</label>
+                <select id="class-filter-entry" value={selectedClass} onChange={handleClassChange} className="w-full bg-gray-700 text-white text-sm rounded-md p-1 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="all">All Students</option>
+                {classNames.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+            </div>
+        )}
+        {/* --- END ADD --- */}
+
+
+        {/* Overall Progress (Uses filtered students length now) */}
          <div className="mb-4">
              <div className="flex justify-between text-sm text-gray-400 mb-1">
                  <span>Marking Progress ({markedStudents.size}/{students.length})</span>
@@ -268,6 +344,7 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
 
 
         <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+          {/* Now maps over the filtered 'students' list */}
           {students.map((s, index) => {
              const result = test.results.find(r => r.studentId === s.id && r.type === testType);
              const isMarked = !!result;
@@ -301,10 +378,10 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
           Marking: {test.name} ({testType.toUpperCase()})
         </h2>
         <h3 className="text-lg text-indigo-400 mb-4">
-          Student: {currentStudent.lastName}, {currentStudent.firstName}
+          Student: {currentStudent.lastName}, {currentStudent.firstName} {currentStudent.className && `(${currentStudent.className})`} {/* Added class name */}
         </h3>
 
-        <div ref={formRef} className="space-y-4">
+        <div ref={formRef} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2"> {/* Added max-height and scroll */}
           {test.questions.map((q, index) => (
             <div key={q.id} className="grid grid-cols-4 gap-4 items-center border-b border-gray-700 pb-3 last:border-b-0">
                {/* Question Info */}
@@ -312,8 +389,14 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
                  <label className="block text-sm font-medium text-gray-300">
                     Q{index + 1}: {q.prompt} ({q.type})
                  </label>
-                 {(q.type === 'MCQ' || q.type === 'Matching') && q.options && (
+                 {/* Display options/details if needed - No change needed here */}
+                 {(q.type === 'MCQ') && q.options && (
                      <p className="text-xs text-gray-400 mt-1">Options: {q.options.join(', ')}</p>
+                 )}
+                 {(q.type === 'Matching') && q.matchPairs && (
+                     <ul className="text-xs text-gray-400 mt-1 list-disc list-inside">
+                        {q.matchPairs.map(p => <li key={p.id}>{p.term} &rarr; {p.correctMatch}</li>)}
+                     </ul>
                  )}
               </div>
               {/* Input & Marks */}
@@ -326,12 +409,12 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 flex gap-4">
+        <div className="mt-6 pt-4 border-t border-gray-700 flex gap-4"> {/* Added top padding and border */}
             <button
                 onClick={handleClear}
                 className="w-full px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
             >
-                Clear All Responses
+                Clear Student ({testType})
             </button>
             <button
                 onClick={handleSaveAndNext}
