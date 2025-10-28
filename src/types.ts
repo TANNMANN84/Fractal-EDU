@@ -1,6 +1,4 @@
-// src/types.ts
 
-// --- Exam Analysis Question Type ---
 export interface Question {
   id: string;
   number: string; // e.g., "1", "a", "i"
@@ -114,6 +112,7 @@ export type AppAction =
   | { type: 'SET_APP_MODE'; payload: AppMode }
   // Exam Actions
   | { type: 'ADD_EXAM'; payload: Exam }
+  | { type: 'DELETE_EXAM'; payload: string } // <-- ADDED THIS LINE
   | { type: 'SET_ACTIVE_EXAM'; payload: string | null }
   | { type: 'SET_SYLLABUS'; payload: { examId: string; syllabus: string } }
   | { type: 'SET_QUESTIONS'; payload: { examId: string; questions: Question[] } }
