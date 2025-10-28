@@ -24,6 +24,7 @@ const ExamAnalysisContainer = () => {
         structureLocked: false,
       };
       dispatch({ type: 'ADD_EXAM', payload: newExam });
+      // No need to dispatch SET_ACTIVE_EXAM here, ADD_EXAM handles it
     }
   };
 
@@ -34,7 +35,26 @@ const ExamAnalysisContainer = () => {
       dispatch({ type: 'SET_STRUCTURE_LOCKED', payload: { examId: activeExam.id, locked: false } });
     };
     return (
-      <>{!structureLocked ? <SetupSection onFinalize={() => {}} /> : <><DataEntryView onEditSetup={handleEditSetup} /><AnalysisDashboard /></>}</>
+      // Wrap the content in a div to easily place the back button
+      <div className="relative">
+        {/* Back Button - Positioned top-right within the active exam view */}
+        <button
+          onClick={() => dispatch({ type: 'SET_ACTIVE_EXAM', payload: null })}
+          className="absolute top-0 right-0 mt-1 mr-1 px-3 py-1 text-xs font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 z-10" // Added z-index
+        >
+          &larr; Back to Dashboard
+        </button>
+
+        {/* Existing conditional rendering for exam content */}
+        {!structureLocked ? (
+          <SetupSection onFinalize={() => {}} />
+        ) : (
+          <>
+            <DataEntryView onEditSetup={handleEditSetup} />
+            <AnalysisDashboard />
+          </>
+        )}
+      </div>
     );
   }
 
