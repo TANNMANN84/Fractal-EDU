@@ -24,7 +24,13 @@ const ExamAnalysisContainer = () => {
         structureLocked: false,
       };
       dispatch({ type: 'ADD_EXAM', payload: newExam });
-      // No need to dispatch SET_ACTIVE_EXAM here, ADD_EXAM handles it
+    }
+  };
+
+  // --- Add handler for deleting an exam ---
+  const handleDeleteExam = (examId: string, examName: string) => {
+    if (window.confirm(`Are you sure you want to delete the exam "${examName}"? This action cannot be undone.`)) {
+      dispatch({ type: 'DELETE_EXAM', payload: examId });
     }
   };
 
@@ -35,17 +41,13 @@ const ExamAnalysisContainer = () => {
       dispatch({ type: 'SET_STRUCTURE_LOCKED', payload: { examId: activeExam.id, locked: false } });
     };
     return (
-      // Wrap the content in a div to easily place the back button
       <div className="relative">
-        {/* Back Button - Positioned top-right within the active exam view */}
         <button
           onClick={() => dispatch({ type: 'SET_ACTIVE_EXAM', payload: null })}
-          className="absolute top-0 right-0 mt-1 mr-1 px-3 py-1 text-xs font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 z-10" // Added z-index
+          className="absolute top-0 right-0 mt-1 mr-1 px-3 py-1 text-xs font-medium rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 z-10"
         >
           &larr; Back to Dashboard
         </button>
-
-        {/* Existing conditional rendering for exam content */}
         {!structureLocked ? (
           <SetupSection onFinalize={() => {}} />
         ) : (
@@ -70,11 +72,24 @@ const ExamAnalysisContainer = () => {
       <div className="space-y-3">
         {exams.length > 0 ? (
           exams.map(exam => (
-            <div key={exam.id} className="p-4 bg-gray-700/50 rounded-lg flex justify-between items-center">
-              <span className="text-lg font-semibold text-white">{exam.name}</span>
-              <button onClick={() => dispatch({ type: 'SET_ACTIVE_EXAM', payload: exam.id })} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                Select
-              </button>
+            <div key={exam.id} className="p-4 bg-gray-700/50 rounded-lg flex flex-wrap justify-between items-center gap-2">
+              <span className="text-lg font-semibold text-white flex-grow">{exam.name}</span>
+              {/* --- Add Delete Button Here --- */}
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => dispatch({ type: 'SET_ACTIVE_EXAM', payload: exam.id })}
+                  className="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Select
+                </button>
+                <button
+                  onClick={() => handleDeleteExam(exam.id, exam.name)} // Pass ID and name to handler
+                  className="px-4 py-2 text-sm font-medium rounded-md text-red-400 bg-gray-800 hover:bg-red-900/50" // Adjusted styling
+                  title="Delete Exam"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))
         ) : (
