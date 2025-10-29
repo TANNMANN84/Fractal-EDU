@@ -19,7 +19,10 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
     const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
 
     const handleSelectStudent = (id: string) => {
-        if (isSelectable && editingStudentId !== id) dispatch({ type: 'SET_SELECTED_STUDENT', payload: id });
+        // Only allow selection in exam mode or if explicitly selectable
+        if (isSelectable && editingStudentId !== id) {
+            dispatch({ type: 'SET_SELECTED_STUDENT', payload: id });
+        }
     };
 
     const handleAddStudent = () => {
@@ -38,7 +41,7 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
         e.stopPropagation();
         dispatch({ type: 'REMOVE_STUDENT', payload: { studentId: id, mode } });
     };
-    
+
     const handleToggleDeleteMode = () => {
         dispatch({ type: 'SET_DELETE_MODE', payload: !state.deleteMode });
     };
@@ -151,44 +154,83 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
         }
     }, [editingStudentId]);
 
+    // Determine cursor style based on mode
+    const cursorClass = isSelectable ? 'cursor-pointer' : 'cursor-default';
+
     return (
         <>
             <h3 className="text-lg font-semibold mb-3 text-white">Class List</h3>
             <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
                 {studentsByClass.map(([className, students]) => (
-                    <div key={className}>
-                        <h4 className="text-sm font-bold text-indigo-300 bg-gray-700/50 px-2 py-1 rounded-t-md">{className}</h4>
-                        {students.map(s => (
-                             <div key={s.id} onClick={() => handleSelectStudent(s.id)} className={`flex items-center justify-between p-2 rounded-b-md transition-colors border-l border-r border-b border-gray-700 ${ editingStudentId === s.id ? 'bg-gray-700' : (s.id === state.selectedStudentId && isSelectable) ? 'bg-indigo-600 text-white cursor-pointer' : 'hover:bg-gray-700 cursor-pointer' }`} >
-                                <div className="flex items-center gap-2 flex-grow">
-                                    <input type="checkbox" checked={selectedStudents.has(s.id)} onChange={() => handleMultiSelectToggle(s.id)} className="form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-600 rounded focus:ring-indigo-500" />
-                                    {editingStudentId === s.id ? (
-                                        <div id={`student-edit-input-${s.id}`} className="flex gap-2 w-full">
-                                            <input type="text" value={editingStudent?.lastName || ''} onChange={e => setEditingStudent(p => ({...p, lastName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Last Name" autoFocus />
-                                            <input type="text" value={editingStudent?.firstName || ''} onChange={e => setEditingStudent(p => ({...p, firstName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="First Name" />
-                                            <input type="text" value={editingStudent?.className || ''} onChange={e => setEditingStudent(p => ({...p, className: e.target.value}))} onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(s.id)} onBlur={() => handleSaveEdit(s.id)} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Class Name" />
+                    // --- Wrap each class group in <details> ---
+                    <details key={className} className="bg-gray-700/30 rounded-md border border-gray-700/50 group" open> {/* Default to open */}
+                        <summary className="flex items-center justify-between p-2 cursor-pointer list-none hover:bg-gray-700/50 rounded-t-md">
+                            <h4 className="text-sm font-bold text-indigo-300">
+                                {className} ({students.length})
+                            </h4>
+                            {/* Chevron icon */}
+                            <span className="text-gray-400 group-open:rotate-90 transition-transform duration-200">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </span>
+                        </summary>
+                        {/* Student list within the details element */}
+                        <div className="border-t border-gray-700/50">
+                            {students.map(s => (
+                                <div
+                                    key={s.id}
+                                    onClick={() => handleSelectStudent(s.id)}
+                                    // Removed border-t/b/l/r, added border-b inside details
+                                    className={`flex items-center justify-between p-2 transition-colors border-b border-gray-800/50 last:border-b-0 ${cursorClass} ${ editingStudentId === s.id ? 'bg-gray-700' : (s.id === state.selectedStudentId && isSelectable) ? 'bg-indigo-600 text-white' : 'hover:bg-gray-700/40' }`}
+                                >
+                                    <div className="flex items-center gap-2 flex-grow min-w-0"> {/* Added min-w-0 */}
+                                        {/* Conditionally render checkbox only in exam mode or if selectable */}
+                                        {isSelectable && (
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedStudents.has(s.id)}
+                                                onChange={(e) => { e.stopPropagation(); handleMultiSelectToggle(s.id); }} // Stop propagation
+                                                onClick={(e) => e.stopPropagation()} // Stop propagation on click too
+                                                className="form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-600 rounded focus:ring-indigo-500 flex-shrink-0" // Added flex-shrink-0
+                                            />
+                                        )}
+                                        {editingStudentId === s.id ? (
+                                            <div id={`student-edit-input-${s.id}`} className="flex gap-2 w-full">
+                                                <input type="text" value={editingStudent?.lastName || ''} onChange={e => setEditingStudent(p => ({...p, lastName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Last Name" autoFocus />
+                                                <input type="text" value={editingStudent?.firstName || ''} onChange={e => setEditingStudent(p => ({...p, firstName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="First Name" />
+                                                {/* Allow saving class name here too */}
+                                                <input type="text" value={editingStudent?.className || ''} onChange={e => setEditingStudent(p => ({...p, className: e.target.value}))} onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(s.id)} onBlur={() => handleSaveEdit(s.id)} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Class Name" />
+                                            </div>
+                                        ) : (
+                                            // Added truncate for long names
+                                            <span className="truncate">{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
+                                        )}
+                                    </div>
+                                    {editingStudentId !== s.id && (
+                                        <div className="flex items-center gap-1 flex-shrink-0"> {/* Reduced gap */}
+                                            {!state.deleteMode && (
+                                                <button onClick={(e) => handleEditClick(e, s)} className="text-gray-400 hover:text-white text-xs opacity-50 hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-600" title="Edit Student">✏️</button>
+                                            )}
+                                            {state.deleteMode && (
+                                                <button onClick={(e) => handleRemoveStudent(e, s.id)} className="text-red-400 hover:text-red-300 p-0.5 rounded hover:bg-red-900/50" title="Remove Student">✕</button>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <span>{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
                                     )}
                                 </div>
-                                {editingStudentId !== s.id && (
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                        {!state.deleteMode && <button onClick={(e) => handleEditClick(e, s)} className="text-gray-400 hover:text-white text-xs opacity-50 hover:opacity-100 transition-opacity" title="Edit Student">✏️</button>}
-                                        {state.deleteMode && <button onClick={(e) => handleRemoveStudent(e, s.id)} className="text-red-400 hover:text-red-300" title="Remove Student">✕</button>}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                            ))}
+                        </div>
+                    </details>
                 ))}
             </div>
+            {/* --- Action buttons remain the same --- */}
             <div className="space-y-2 pt-4 border-t border-gray-700">
                 <div className="flex gap-2">
                     <button onClick={handleAddStudent} className="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Add Student</button>
                     <button onClick={() => setIsBulkAddOpen(true)} className="flex-1 inline-flex justify-center items-center px-3 py-1.5 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">Bulk Add</button>
                 </div>
-                {selectedStudents.size > 0 && (
+                {/* Conditionally show move button only if selectable */}
+                {isSelectable && selectedStudents.size > 0 && (
                     <button onClick={handleMoveSelected} className="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
                         Move {selectedStudents.size} Selected to Class...
                     </button>
@@ -201,9 +243,10 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
                 </div>
             </div>
 
+            {/* --- Modal remains the same --- */}
             <Modal isOpen={isBulkAddOpen} onClose={() => setIsBulkAddOpen(false)} title="Bulk Add Students">
                 <p className="text-sm text-gray-400 mb-2">Paste a list of names, one per line. Supported formats: "LastName, FirstName" or "FirstName LastName".</p>
-                <textarea 
+                <textarea
                     value={bulkText}
                     onChange={(e) => setBulkText(e.target.value)}
                     className="w-full h-40 p-2 rounded-md bg-gray-600 text-white border border-gray-500"
