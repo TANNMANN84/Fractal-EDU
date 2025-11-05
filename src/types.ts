@@ -1,4 +1,3 @@
-
 export interface Question {
   id: string;
   number: string; // e.g., "1", "a", "i"
@@ -76,6 +75,7 @@ export interface RapidTest {
   name: string;
   questions: RapidQuestion[];
   results: RapidTestResult[]; // Array of results
+  tags?: string[]; // <-- ADDED THIS
 }
 
 // --- App Mode ---
