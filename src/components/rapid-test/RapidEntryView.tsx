@@ -5,11 +5,11 @@ import { useAppContext } from '../../context/AppContext';
 import { RapidTest, Student, RapidQuestion, RapidTestResult, RapidQuestionType } from '../../types';
 
 interface RapidEntryViewProps {
-  testId: string;
+  test: RapidTest; // <-- MODIFIED: Receive the full test object
   onBack: () => void; // Function to go back to the dashboard
 }
 
-const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
+const RapidEntryView: React.FC<RapidEntryViewProps> = ({ test, onBack }) => { // <-- MODIFIED
   const { state, dispatch } = useAppContext();
   const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
   const [testType, setTestType] = useState<'pre' | 'post'>('pre');
@@ -19,29 +19,45 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
   // --- New State for Class Filter ---
   const [selectedClass, setSelectedClass] = useState<string>('all');
 
-  const test = state.rapidTests.find(t => t.id === testId);
+  // const test = state.rapidTests.find(t => t.id === testId); // No longer needed, passed as prop
   const allStudents = state.rapidTestStudents; // Get all rapid test students initially
 
-  // --- Get unique class names for the dropdown ---
-  const classNames = useMemo(() => {
-    const classes = new Set<string>();
-    allStudents.forEach(s => {
-      if (s.className) classes.add(s.className);
-    });
-    return Array.from(classes).sort();
-  }, [allStudents]);
-
-  // --- Filter students based on selected class ---
+  // --- MODIFIED: Filter students based on test tags, then class ---
   const students = useMemo(() => {
-    const baseStudents = allStudents
+    const testTags = test.tags || [];
+    
+    // 1. Pre-filter students by test tags.
+    // If test has no tags, include all students.
+    // If test has tags, student must have at least ONE matching tag.
+    const taggedStudents = testTags.length === 0 ? allStudents : allStudents.filter(s =>
+        s.tags && s.tags.some(tag => testTags.includes(tag))
+    );
+
+    // 2. Filter by name and sort
+    const baseStudents = taggedStudents
         .filter(s => s.lastName || s.firstName) // Only named students
         .sort((a,b) => a.lastName.localeCompare(b.lastName)); // Sort alphabetically
-
+    
+    // 3. Filter by selected class
     if (selectedClass === 'all') {
         return baseStudents;
     }
     return baseStudents.filter(s => s.className === selectedClass);
-  }, [allStudents, selectedClass]);
+  }, [allStudents, selectedClass, test.tags]); // <-- MODIFIED dependencies
+
+
+  // --- Get unique class names for the dropdown (from the pre-filtered list) ---
+  const classNames = useMemo(() => {
+    const classes = new Set<string>();
+    // Use 'students' memo (which is already filtered by tag) to find relevant classes
+    const taggedStudents = (test.tags?.length || 0) === 0 ? allStudents : allStudents.filter(s =>
+        s.tags && s.tags.some(tag => test.tags!.includes(tag))
+    );
+    taggedStudents.forEach(s => {
+      if (s.className) classes.add(s.className);
+    });
+    return Array.from(classes).sort();
+  }, [allStudents, test.tags]); // <-- MODIFIED dependency
 
 
   // --- Handle Class Selection Change ---
@@ -123,10 +139,10 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
       setCurrentStudentIndex(prev => prev + 1);
     } else {
       // Optionally go back or show completion message
-      alert(`Finished marking last student in ${selectedClass === 'all' ? 'all classes' : 'class ' + selectedClass}!`);
+      alert(`Finished marking last student in ${selectedClass === 'all' ? 'all relevant students' : 'class ' + selectedClass}!`);
       // onBack(); // Example: Go back after last student
     }
-  }, [test, currentStudent, testType, responses, currentStudentIndex, students.length, dispatch, onBack, selectedClass]); // Added selectedClass
+  }, [test, currentStudent, testType, responses, currentStudentIndex, students.length, dispatch, selectedClass]); // Added onBack, selectedClass
 
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, questionIndex: number) => {
@@ -270,17 +286,26 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
             <div className="md:w-1/4 bg-gray-800 border border-gray-700 p-4 rounded-lg h-fit">
                 {/* Still show class filter even if no students match */}
                 <h2 className="text-xl font-semibold text-white mb-2">Class List</h2>
+                 <p className="text-sm text-gray-400 mb-2">
+                    Test: <span className="font-semibold text-gray-300">{test.name}</span>
+                 </p>
+                 {/* --- MODIFIED: Show filter info --- */}
+                 {test.tags && test.tags.length > 0 && (
+                     <p className="text-sm text-gray-400 mb-2">
+                         Showing students tagged: <span className="font-semibold text-cyan-300">{test.tags.join(', ')}</span>
+                     </p>
+                 )}
                  {classNames.length > 0 && (
                     <div className="mb-4">
                         <label htmlFor="class-filter-entry" className="block text-sm font-medium text-gray-400 mb-1">Filter by Class:</label>
                         <select id="class-filter-entry" value={selectedClass} onChange={handleClassChange} className="w-full bg-gray-700 text-white text-sm rounded-md p-1 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="all">All Students</option>
+                        <option value="all">All Relevant Students</option>
                         {classNames.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
                     </div>
                 )}
                 <p className="text-gray-400 text-center py-4">
-                  {selectedClass === 'all' ? 'No students available to mark.' : `No students found in class '${selectedClass}'.`}
+                  {selectedClass === 'all' ? 'No relevant students found for this test.' : `No relevant students found in class '${selectedClass}'.`}
                 </p>
                 <button onClick={onBack} className="mt-4 w-full px-4 py-2 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
                     Back to Dashboard
@@ -317,18 +342,25 @@ const RapidEntryView: React.FC<RapidEntryViewProps> = ({ testId, onBack }) => {
                  <button onClick={() => { setTestType('post'); setCurrentStudentIndex(0); }} className={`px-2 py-1 text-xs font-medium rounded-md ${testType === 'post' ? 'text-white bg-indigo-600' : 'text-gray-300 hover:bg-gray-600'}`}> Post </button>
              </div>
         </div>
+        
+        {/* --- ADDED: Show active test tags --- */}
+        {test.tags && test.tags.length > 0 && (
+             <p className="text-sm text-gray-400 mb-2">
+                 Filtering for students tagged: <span className="font-semibold text-cyan-300">{test.tags.join(', ')}</span>
+             </p>
+         )}
 
-        {/* --- ADDED Class Filter Dropdown --- */}
+        {/* --- MODIFIED Class Filter Dropdown --- */}
         {classNames.length > 0 && (
             <div className="mb-4">
                 <label htmlFor="class-filter-entry" className="block text-sm font-medium text-gray-400 mb-1">Filter by Class:</label>
                 <select id="class-filter-entry" value={selectedClass} onChange={handleClassChange} className="w-full bg-gray-700 text-white text-sm rounded-md p-1 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
-                <option value="all">All Students</option>
+                <option value="all">All Relevant Students</option>
                 {classNames.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
             </div>
         )}
-        {/* --- END ADD --- */}
+        {/* --- END MOD --- */}
 
 
         {/* Overall Progress (Uses filtered students length now) */}
