@@ -1,3 +1,5 @@
+// src/components/entry/StudentList.tsx
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import Modal from '../../components/Modal';
@@ -15,7 +17,7 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
     const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
     const [bulkText, setBulkText] = useState('');
     const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
-    const [editingStudent, setEditingStudent] = useState<Partial<Student> | null>(null);
+    const [editingStudent, setEditingStudent] = useState<Partial<Student> & { tagString?: string } | null>(null); // <-- ADDED tagString
     const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
 
     const handleSelectStudent = (id: string) => {
@@ -30,7 +32,8 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
         dispatch({ type: 'ADD_STUDENT', payload: { mode: mode, student: newStudent } });
         // Enter edit mode for the new student
         setEditingStudentId(newStudent.id);
-        setEditingStudent({ lastName: '', firstName: '', className: '' });
+        // <-- ADDED tagString to editing state
+        setEditingStudent({ lastName: '', firstName: '', className: '', tagString: '' });
         setTimeout(() => {
             // Focus the new input field's first input
             (document.querySelector(`#student-edit-input-${newStudent.id} input`) as HTMLInputElement)?.focus();
@@ -73,7 +76,8 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
         e.stopPropagation();
         setSelectedStudents(new Set()); // Clear multi-selection
         setEditingStudentId(student.id);
-        setEditingStudent({ ...student });
+        // --- LOAD TAGS INTO EDITOR ---
+        setEditingStudent({ ...student, tagString: student.tags?.join(', ') || '' });
     };
 
     const handleCancelEdit = () => {
@@ -85,11 +89,14 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
         const student = studentList.find(s => s.id === studentId);
         if (!student || !editingStudent) return;
 
+        // --- SAVE TAGS FROM EDITOR ---
         const updatedStudent: Student = {
             ...student,
             lastName: editingStudent.lastName || '',
             firstName: editingStudent.firstName || '',
             className: editingStudent.className?.trim() || '',
+            // Parse tags from the tagString
+            tags: editingStudent.tagString?.split(',').map(tag => tag.trim()).filter(Boolean) || [],
         };
 
         dispatch({ type: 'UPDATE_STUDENT', payload: { student: updatedStudent, mode } });
@@ -196,15 +203,37 @@ const StudentList: React.FC<StudentListProps> = ({ studentList, mode, isSelectab
                                             />
                                         )}
                                         {editingStudentId === s.id ? (
-                                            <div id={`student-edit-input-${s.id}`} className="flex gap-2 w-full">
-                                                <input type="text" value={editingStudent?.lastName || ''} onChange={e => setEditingStudent(p => ({...p, lastName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Last Name" autoFocus />
-                                                <input type="text" value={editingStudent?.firstName || ''} onChange={e => setEditingStudent(p => ({...p, firstName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="First Name" />
-                                                {/* Allow saving class name here too */}
-                                                <input type="text" value={editingStudent?.className || ''} onChange={e => setEditingStudent(p => ({...p, className: e.target.value}))} onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(s.id)} onBlur={() => handleSaveEdit(s.id)} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Class Name" />
+                                            // --- WRAPPED INPUTS FOR FLEX-COL ---
+                                            <div id={`student-edit-input-${s.id}`} className="flex flex-col gap-1 w-full">
+                                                <div className="flex gap-2 w-full">
+                                                    <input type="text" value={editingStudent?.lastName || ''} onChange={e => setEditingStudent(p => ({...p, lastName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Last Name" autoFocus />
+                                                    <input type="text" value={editingStudent?.firstName || ''} onChange={e => setEditingStudent(p => ({...p, firstName: e.target.value}))} className="w-full bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="First Name" />
+                                                </div>
+                                                <div className="flex gap-2 w-full">
+                                                    <input type="text" value={editingStudent?.className || ''} onChange={e => setEditingStudent(p => ({...p, className: e.target.value}))} className="w-1/2 bg-gray-600 text-white p-1 rounded-md text-sm" placeholder="Class Name" />
+                                                    {/* --- ADDED TAGS INPUT --- */}
+                                                    <input
+                                                        type="text"
+                                                        value={editingStudent?.tagString || ''}
+                                                        onChange={e => setEditingStudent(p => ({...p, tagString: e.target.value}))}
+                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(s.id)}
+                                                        onBlur={() => handleSaveEdit(s.id)} // Save on blur
+                                                        className="w-1/2 bg-gray-600 text-white p-1 rounded-md text-sm"
+                                                        placeholder="Tags (e.g., Year 7, 7B)"
+                                                    />
+                                                </div>
                                             </div>
                                         ) : (
-                                            // Added truncate for long names
-                                            <span className="truncate">{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
+                                            // --- ADDED TAGS DISPLAY ---
+                                            <div className="truncate">
+                                                <span>{s.lastName || s.firstName ? `${s.lastName || ''}, ${s.firstName || ''}`.trim() : 'Unnamed Student'}</span>
+                                                {/* Display tags if they exist */}
+                                                {s.tags && s.tags.length > 0 && (
+                                                    <span className="ml-2 text-xs text-cyan-300 bg-gray-900/50 px-1.5 py-0.5 rounded-full">
+                                                        {s.tags.join(', ')}
+                                                    </span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                     {editingStudentId !== s.id && (
