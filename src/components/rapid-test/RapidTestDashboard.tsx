@@ -1,8 +1,8 @@
 // src/components/rapid-test/RapidTestDashboard.tsx
 
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react'; // Added useMemo
 import { useAppContext } from '../../context/AppContext';
-import { RapidTest, RapidQuestion, RapidQuestionType, AppState } from '../../types'; // Import necessary types
+import { RapidTest, RapidQuestion, RapidQuestionType, AppState, Student } from '../../types'; // Import necessary types
 import RapidTestEditor from './RapidTestEditor';
 import RapidEntryView from './RapidEntryView';
 import StudentList from '../entry/StudentList';
@@ -39,18 +39,68 @@ const createDiagnosticTemplate = (): RapidTest => {
       else if (q.type === 'Marks' && questions.length - 1 === index) q.prompt = `Diagram Label Score Q${index + 1}`;
       else q.prompt = `Q${index + 1} (${q.type})`;
   });
-  return { id: crypto.randomUUID(), name: 'New Diagnostic Test (Template)', questions: questions, results: [], };
+  return {
+    id: crypto.randomUUID(),
+    name: 'New Diagnostic Test (Template)',
+    questions: questions,
+    results: [],
+    tags: [] // <-- ADDED
+  };
 };
 
 // --- Main Component ---
 const RapidTestDashboard: React.FC = () => {
   const { state, dispatch } = useAppContext();
   // Ensure rapidTests exists on state, default to empty array if not
-  const rapidTests = state.rapidTests || [];
+  const allRapidTests = state.rapidTests || [];
+  const allRapidTestStudents = state.rapidTestStudents || [];
 
   const [editingTest, setEditingTest] = useState<RapidTest | null>(null);
   const [markingTestId, setMarkingTestId] = useState<string | null>(null);
   const [analysingTestId, setAnalysingTestId] = useState<string | null>(null); // State for analysis view
+
+  // --- ADDED: State for Tag Filtering ---
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+
+  // --- ADDED: Memo to get all unique tags ---
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    allRapidTests.forEach((test: RapidTest) => {
+      test.tags?.forEach(tag => tagSet.add(tag));
+    });
+    allRapidTestStudents.forEach((student: Student) => {
+      student.tags?.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  }, [allRapidTests, allRapidTestStudents]);
+
+  // --- ADDED: Handler to toggle a tag ---
+  const toggleTag = (tag: string) => {
+    setActiveTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
+  // --- ADDED: Filter tests based on active tags ---
+  const filteredRapidTests = useMemo(() => {
+    if (activeTags.length === 0) {
+      return allRapidTests;
+    }
+    return allRapidTests.filter(test =>
+      activeTags.every(tag => test.tags?.includes(tag))
+    );
+  }, [allRapidTests, activeTags]);
+
+  // --- ADDED: Filter students based on active tags ---
+  const filteredStudents = useMemo(() => {
+    if (activeTags.length === 0) {
+      return allRapidTestStudents;
+    }
+    return allRapidTestStudents.filter(student =>
+      activeTags.every(tag => student.tags?.includes(tag))
+    );
+  }, [allRapidTestStudents, activeTags]);
+
 
   const handleCreateNew = () => {
     const newTest: RapidTest = {
@@ -58,12 +108,14 @@ const RapidTestDashboard: React.FC = () => {
       name: 'New Blank Test',
       questions: [],
       results: [],
+      tags: [...activeTags] // <-- ADDED: Auto-tag new test with active filters
     };
     setEditingTest(newTest);
   };
 
   const handleCreateFromTemplate = () => {
     const templateTest = createDiagnosticTemplate();
+    templateTest.tags = [...activeTags]; // <-- ADDED: Auto-tag new test
     setEditingTest(templateTest);
   };
 
@@ -114,11 +166,25 @@ const RapidTestDashboard: React.FC = () => {
           const text = e.target?.result;
           if (typeof text !== 'string') throw new Error('File could not be read.');
           
-          const testData = JSON.parse(text) as RapidTest;
+          let testData = JSON.parse(text) as RapidTest & { yearGroup?: number }; // <-- ADDED yearGroup type
 
           // Basic validation
           if (testData && testData.id && testData.name && Array.isArray(testData.questions)) {
-            if (!rapidTests.find((t: RapidTest) => t.id === testData.id)) {
+            
+            // --- ADDED: Auto-migration from yearGroup ---
+            if (testData.yearGroup) {
+              const yearTag = `Year ${testData.yearGroup}`;
+              if (!testData.tags) {
+                testData.tags = [];
+              }
+              if (!testData.tags.includes(yearTag)) {
+                testData.tags.push(yearTag);
+              }
+              delete testData.yearGroup; // Clean up old field
+            }
+            // --- END MIGRATION ---
+
+            if (!allRapidTests.find((t: RapidTest) => t.id === testData.id)) {
               dispatch({ type: 'ADD_RAPID_TEST', payload: testData });
               alert(`Test "${testData.name}" loaded successfully!`);
             } else {
@@ -139,12 +205,12 @@ const RapidTestDashboard: React.FC = () => {
 
   // --- Conditional Rendering Logic ---
   if (markingTestId) {
-      const testToMark = rapidTests.find((t: RapidTest) => t.id === markingTestId); // Add type
+      const testToMark = allRapidTests.find((t: RapidTest) => t.id === markingTestId); // Add type
       if (!testToMark) { return ( <div className="text-red-400 p-4">Error: Test not found. <button onClick={handleBackToDashboard}>Back</button></div> ); }
-      return <RapidEntryView testId={markingTestId} onBack={handleBackToDashboard} />;
+      return <RapidEntryView test={testToMark} onBack={handleBackToDashboard} />; // <-- MODIFIED: Pass test object
   }
   if (analysingTestId) { // Added Analysis view placeholder
-    const testToAnalyse = rapidTests.find((t: RapidTest) => t.id === analysingTestId); // Add type
+    const testToAnalyse = allRapidTests.find((t: RapidTest) => t.id === analysingTestId); // Add type
     if (!testToAnalyse) { return ( <div className="text-red-400 p-4">Error: Test not found. <button onClick={handleBackToDashboard}>Back</button></div> ); }
     return (
       <Suspense fallback={<div className="text-center p-8">Loading Analysis...</div>}>
@@ -161,7 +227,8 @@ const RapidTestDashboard: React.FC = () => {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Panel 1: Student List */}
         <div className="lg:col-span-1 bg-gray-800 border border-gray-700 p-4 rounded-lg shadow-md h-fit">
-            <StudentList studentList={state.rapidTestStudents} mode="rapidTest" isSelectable={false} />
+            {/* --- MODIFIED: Pass filteredStudents --- */}
+            <StudentList studentList={filteredStudents} mode="rapidTest" isSelectable={false} />
         </div>
 
         {/* Panel 2: Test Dashboard */}
@@ -175,13 +242,54 @@ const RapidTestDashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* --- ADDED: Tag Filter Section --- */}
+            {allTags.length > 0 && (
+              <div className="pt-2 pb-4 border-b border-gray-700">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-sm font-medium text-gray-400">Filter by Tag:</span>
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`px-3 py-1 text-sm font-medium rounded-full ${
+                        activeTags.includes(tag)
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                  {activeTags.length > 0 && (
+                    <button
+                      onClick={() => setActiveTags([])}
+                      className="px-3 py-1 text-sm font-medium rounded-full text-red-400 hover:bg-red-900/50"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* --- END: Tag Filter Section --- */}
+
+
             <div className="space-y-3">
-                {rapidTests.length === 0 ? ( <p className="text-gray-400 text-center py-4"> No Pre/Post tests created yet. </p> )
-                 : ( rapidTests.map((test: RapidTest) => ( // Added type
+                {/* --- MODIFIED: Map over filteredRapidTests --- */}
+                {filteredRapidTests.length === 0 ? ( <p className="text-gray-400 text-center py-4"> {allRapidTests.length === 0 ? "No Pre/Post tests created yet." : "No tests match the selected filters."} </p> )
+                 : ( filteredRapidTests.map((test: RapidTest) => ( // Added type
                     <div key={test.id} className="p-4 bg-gray-700/50 rounded-lg flex flex-wrap justify-between items-center gap-2" >
                     <div className="flex-grow">
                         <h3 className="text-lg font-semibold text-white">{test.name}</h3>
-                        <p className="text-sm text-gray-400"> {test.questions.length} Questions </p>
+                        <p className="text-sm text-gray-400">
+                           {test.questions.length} Questions
+                           {/* --- ADDED: Display test tags --- */}
+                           {test.tags && test.tags.length > 0 && (
+                               <span className="ml-3 text-xs text-cyan-300 bg-gray-900/50 px-1.5 py-0.5 rounded-full">
+                                  {test.tags.join(', ')}
+                               </span>
+                           )}
+                        </p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                         <button onClick={() => handleStartMarking(test.id)} className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700" title="Enter Results" > Mark </button>
