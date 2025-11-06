@@ -29,6 +29,13 @@ const RapidTestEditor: React.FC<RapidTestEditorProps> = ({
     setLocalTest({ ...localTest, name: e.target.value });
   };
 
+  // --- ADDED: Handler for Tags ---
+  const handleTagsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const tags = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
+    setLocalTest({ ...localTest, tags });
+  };
+
+
   const handleAddQuestion = () => {
     setLocalTest({
       ...localTest,
@@ -69,19 +76,35 @@ const RapidTestEditor: React.FC<RapidTestEditorProps> = ({
         </div>
       </div>
 
-      {/* Test Name */}
-      <div>
-        <label className="block text-lg font-medium text-gray-300">
-          Test Name
-        </label>
-        <input
-          type="text"
-          value={localTest.name}
-          onChange={handleTestNameChange}
-          placeholder="e.g., Year 11 Module 5 Test"
-          className="mt-1 w-full max-w-lg rounded-md bg-gray-600 border-gray-500 shadow-sm p-2 text-white text-lg"
-        />
+      {/* --- MODIFIED: Test Name & Tags --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-lg font-medium text-gray-300">
+            Test Name
+          </label>
+          <input
+            type="text"
+            value={localTest.name}
+            onChange={handleTestNameChange}
+            placeholder="e.g., Year 11 Module 5 Test"
+            className="mt-1 w-full rounded-md bg-gray-600 border-gray-500 shadow-sm p-2 text-white text-lg"
+          />
+        </div>
+        {/* --- ADDED: Tags Input --- */}
+        <div>
+          <label className="block text-lg font-medium text-gray-300">
+            Tags (comma-separated)
+          </label>
+          <input
+            type="text"
+            value={localTest.tags?.join(', ') || ''}
+            onChange={handleTagsChange}
+            placeholder="e.g., Year 7, 7B, Stage 4"
+            className="mt-1 w-full rounded-md bg-gray-600 border-gray-500 shadow-sm p-2 text-white text-lg"
+          />
+        </div>
       </div>
+
 
       {/* Questions List */}
       <div className="space-y-4">
